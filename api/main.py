@@ -57,6 +57,21 @@ def health():
     return {'status': 'ok', 'data_ready': store.ready}
 
 
+@app.get('/_debug')
+def debug():
+    import glob
+    here = Path(__file__)
+    pub = PUBLIC_DIR
+    return {
+        '__file__': str(here),
+        'public_dir': str(pub),
+        'public_exists': pub.exists(),
+        'index_exists': (pub / 'index.html').exists(),
+        'cwd': os.getcwd(),
+        'listing': glob.glob(str(pub / '**'), recursive=True)[:30],
+    }
+
+
 @app.get('/api/signals')
 def get_signals(bankroll: float = None) -> List[Dict]:
     # gw: reserved for v2 per-GW filtering. Currently ignored — all fixtures in fixtures.json are processed.
