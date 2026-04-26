@@ -1,3 +1,12 @@
+function marketLabel(m) {
+  const labels = {
+    o25: 'Over 2.5', u25: 'Under 2.5',
+    btts: 'BTTS', hw: 'Home Win',
+    aw: 'Away Win', o35: 'Over 3.5',
+  };
+  return labels[m] || m;
+}
+
 async function loadBankroll() {
   const data = await API.bankroll();
   const { starting_bankroll, current_bankroll, bets } = data;
@@ -12,9 +21,11 @@ async function loadBankroll() {
   document.getElementById('kpi-roi').textContent = `${roi > 0 ? '+' : ''}${roi}%`;
   document.getElementById('kpi-bets').textContent = bets.length;
 
-  const wins = bets.filter(b => b.result === 'WIN').length;
+  // Win rate: settled bets only (exclude pending/void)
+  const settled = bets.filter(b => b.result === 'WIN' || b.result === 'LOSS');
+  const wins = settled.filter(b => b.result === 'WIN').length;
   document.getElementById('kpi-winrate').textContent =
-    bets.length ? `${(wins / bets.length * 100).toFixed(0)}%` : '—';
+    settled.length ? `${(wins / settled.length * 100).toFixed(0)}%` : '—';
 
   const avgStake = bets.length
     ? `€${(bets.reduce((a, b) => a + b.stake, 0) / bets.length).toFixed(2)}`
@@ -26,22 +37,28 @@ async function loadBankroll() {
   if (bets.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-2);padding:24px 0">No bets recorded yet.</td></tr>';
   } else {
-    tbody.innerHTML = bets.slice(-10).reverse().map(b => `
+    tbody.innerHTML = bets.slice(-10).reverse().map(b => {
+      const isPending = b.result === 'PENDING';
+      const pnlColor = isPending ? 'var(--text-3)' : b.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const pnlText = isPending ? '—' : `${b.pnl >= 0 ? '+' : ''}€${Math.abs(b.pnl).toFixed(2)}`;
+      const resultColor = b.result === 'WIN' ? 'var(--green)' : b.result === 'LOSS' ? 'var(--red)' : 'var(--text-2)';
+      const scoreTag = b.result_score
+        ? ` <span style="color:var(--text-3);font-size:10px">${b.result_score}</span>`
+        : '';
+      return `
       <tr>
-        <td><span class="tbadge tb-${b.tier.toLowerCase()}">${b.tier}</span></td>
+        <td><span class="tbadge tb-${(b.tier || 'bet').toLowerCase()}">${b.tier || 'BET'}</span></td>
         <td>
           <div style="font-size:14px;font-weight:500">${b.home} vs ${b.away}</div>
-          <div style="font-size:11px;color:var(--text-2)">${b.market} · @ ${b.odds}</div>
+          <div style="font-size:11px;color:var(--text-2)">${marketLabel(b.market)} · @ ${(b.odds || 0).toFixed(2)} · ${b.date || ''}</div>
         </td>
-        <td style="font-size:14px;font-weight:500">€${b.stake.toFixed(2)}</td>
+        <td style="font-size:14px;font-weight:500">€${(b.stake || 0).toFixed(2)}</td>
         <td style="text-align:right">
-          <span style="font-size:12px;font-weight:600;color:${b.result === 'WIN' ? 'var(--green)' : b.result === 'LOSS' ? 'var(--red)' : 'var(--text-2)'}">${b.result}</span>
+          <span style="font-size:12px;font-weight:600;color:${resultColor}">${b.result}${scoreTag}</span>
         </td>
-        <td style="text-align:right;font-size:14px;font-weight:600;color:${b.pnl >= 0 ? 'var(--green)' : 'var(--red)'}">
-          ${b.pnl >= 0 ? '+' : ''}€${Math.abs(b.pnl).toFixed(2)}
-        </td>
-      </tr>
-    `).join('');
+        <td style="text-align:right;font-size:14px;font-weight:600;color:${pnlColor}">${pnlText}</td>
+      </tr>`;
+    }).join('');
   }
 
   // Status bar
@@ -49,14 +66,16 @@ async function loadBankroll() {
   document.getElementById('sb-pnl').textContent = `${pnl >= 0 ? '+' : ''}€${pnl.toFixed(2)}`;
   document.getElementById('sb-total-bets').textContent = bets.length;
 
-  // Max drawdown
+  // Max drawdown (settled bets only)
   let peak = starting_bankroll;
   let maxDD = 0;
   let running = starting_bankroll;
   for (const b of bets) {
-    running += b.pnl || 0;
-    peak = Math.max(peak, running);
-    maxDD = Math.max(maxDD, peak - running);
+    if (b.result === 'WIN' || b.result === 'LOSS') {
+      running += b.pnl || 0;
+      peak = Math.max(peak, running);
+      maxDD = Math.max(maxDD, peak - running);
+    }
   }
   document.getElementById('sb-dd').textContent = maxDD > 0 ? `-€${maxDD.toFixed(2)}` : '—';
 }

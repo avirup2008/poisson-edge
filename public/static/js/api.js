@@ -40,4 +40,23 @@ const API = {
     if (!r.ok) throw new Error(`model: ${r.status}`);
     return r.json();
   },
+  async logBet(payload) {
+    const r = await fetch('/api/bets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`logBet: ${r.status}`);
+    return r.json();
+  },
+  async bets() {
+    const r = await fetch('/api/bets');
+    if (!r.ok) throw new Error(`bets: ${r.status}`);
+    return r.json();
+  },
+  async refreshResults() {
+    const r = await fetch('/api/refresh-results', { method: 'POST' });
+    if (!r.ok) throw new Error(`refresh-results: ${r.status}`);
+    return r.json();
+  },
 };

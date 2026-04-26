@@ -14,6 +14,7 @@
   ],
   "crons": [
     { "path": "/api/refresh-fixtures", "schedule": "0 9 * * 1" },
-    { "path": "/api/refresh-fixtures", "schedule": "0 9 * * 4" }
+    { "path": "/api/refresh-fixtures", "schedule": "0 9 * * 4" },
+    { "path": "/api/refresh-results", "schedule": "0 23 * * *" }
   ]
 }
