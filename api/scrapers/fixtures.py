@@ -141,16 +141,12 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     if cached is not None:
         return cached
 
-    url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-    params = {
-        'apiKey': api_key,
-        'bookmakers': 'pinnacle',
-        'markets': 'totals,h2h,btts',
-        'oddsFormat': 'decimal',
-        'regions': 'eu',
-    }
+    # OddsAPI requires raw commas in markets — httpx URL-encodes them causing 422
+    url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
+           f'?apiKey={api_key}&bookmakers=pinnacle&markets=totals,h2h,btts'
+           f'&oddsFormat=decimal&regions=eu')
     try:
-        r = httpx.get(url, params=params, timeout=15)
+        r = httpx.get(url, timeout=15)
         print(f'[fixtures] OddsAPI status={r.status_code} remaining={r.headers.get("x-requests-remaining","?")} body_len={len(r.text)}')
         r.raise_for_status()
         events = r.json()

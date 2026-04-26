@@ -62,14 +62,14 @@ def debug_odds() -> Dict:
     if not api_key:
         return {'error': 'ODDS_API_KEY not set', 'key_set': False}
 
-    # 1) Direct OddsAPI call (same params as fetch_upcoming_fixtures)
-    url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-    params = {'apiKey': api_key, 'bookmakers': 'pinnacle',
-              'markets': 'totals,h2h,btts', 'oddsFormat': 'decimal', 'regions': 'eu'}
+    # 1) Direct OddsAPI call — raw commas required, httpx encodes them causing 422
+    url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
+           f'?apiKey={api_key}&bookmakers=pinnacle&markets=totals,h2h,btts'
+           f'&oddsFormat=decimal&regions=eu')
     raw_error = None
     body = []
     try:
-        r = _httpx.get(url, params=params, timeout=20)
+        r = _httpx.get(url, timeout=20)
         r.raise_for_status()
         body = r.json()
         remaining = r.headers.get('x-requests-remaining')

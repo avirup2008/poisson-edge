@@ -8,16 +8,12 @@ EPL_KEY = 'soccer_epl'
 
 def fetch_pinnacle_odds(home: str, away: str, api_key: str) -> Dict:
     """Returns {o25, u25, btts, hw, aw} Pinnacle odds. Returns {} on error."""
-    url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-    params = {
-        'apiKey': api_key,
-        'bookmakers': 'pinnacle',
-        'markets': 'totals,h2h,btts',
-        'oddsFormat': 'decimal',
-        'regions': 'eu',
-    }
+    # OddsAPI requires raw commas in markets — httpx URL-encodes them causing 422
+    url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
+           f'?apiKey={api_key}&bookmakers=pinnacle&markets=totals,h2h,btts'
+           f'&oddsFormat=decimal&regions=eu')
     try:
-        r = httpx.get(url, params=params, timeout=15)
+        r = httpx.get(url, timeout=15)
         r.raise_for_status()
         events = r.json()
     except Exception:
