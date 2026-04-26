@@ -54,24 +54,34 @@ def health():
 
 @app.get('/api/debug-odds')
 def debug_odds() -> Dict:
-    """Temporary: show raw OddsAPI response + parse pipeline for diagnosis."""
+    """Temporary: show raw OddsAPI response + full fetch pipeline for diagnosis."""
     import httpx as _httpx
     from api.scrapers.odds import ODDS_API_BASE, EPL_KEY
-    from api.scrapers.fixtures import _parse_event, _normalise
+    from api.scrapers.fixtures import _parse_event, _normalise, fetch_upcoming_fixtures, force_refresh
     api_key = os.getenv('ODDS_API_KEY', '')
     if not api_key:
         return {'error': 'ODDS_API_KEY not set', 'key_set': False}
+
+    # 1) Direct OddsAPI call (same params as fetch_upcoming_fixtures)
     url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
     params = {'apiKey': api_key, 'bookmakers': 'pinnacle',
               'markets': 'totals,h2h,btts', 'oddsFormat': 'decimal', 'regions': 'eu'}
+    raw_error = None
+    body = []
     try:
-        r = _httpx.get(url, params=params, timeout=15)
-        body = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.text
-        if not isinstance(body, list):
-            return {'status_code': r.status_code, 'error_body': body}
+        r = _httpx.get(url, params=params, timeout=20)
+        r.raise_for_status()
+        body = r.json()
+        remaining = r.headers.get('x-requests-remaining')
+        status_code = r.status_code
+    except Exception as exc:
+        raw_error = str(exc)
+        remaining = None
+        status_code = None
 
-        # Run parse pipeline on first 3 events
-        parse_results = []
+    # 2) Run parse pipeline on first 3 raw events
+    parse_results = []
+    if isinstance(body, list):
         for e in body[:3]:
             parsed = _parse_event(e, None)
             parse_results.append({
@@ -82,15 +92,27 @@ def debug_odds() -> Dict:
                                      if bm.get('key') == 'pinnacle'
                                      for m in bm.get('markets', [])],
             })
-        return {
-            'status_code': r.status_code,
-            'remaining': r.headers.get('x-requests-remaining'),
-            'event_count': len(body),
-            'parse_sample': parse_results,
-            'key_prefix': api_key[:8] + '…',
-        }
+
+    # 3) Run the full fetch_upcoming_fixtures pipeline and capture result/error
+    fetch_result = None
+    fetch_error = None
+    try:
+        from api.scrapers.fixtures import _CACHE_FILE
+        _CACHE_FILE.unlink(missing_ok=True)  # clear cache so it makes a fresh call
+        fetch_result = fetch_upcoming_fixtures(api_key, None)
     except Exception as exc:
-        return {'error': str(exc)}
+        fetch_error = str(exc)
+
+    return {
+        'status_code': status_code,
+        'remaining': remaining,
+        'raw_error': raw_error,
+        'event_count': len(body) if isinstance(body, list) else 0,
+        'parse_sample': parse_results,
+        'fetch_result_count': len(fetch_result) if fetch_result is not None else None,
+        'fetch_error': fetch_error,
+        'key_prefix': api_key[:8] + '…',
+    }
 
 
 @app.get('/api/refresh-fixtures')
