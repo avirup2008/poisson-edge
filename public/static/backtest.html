@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POISSON-EDGE — Backtest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/globals.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="logo">PE</div>
+    <a class="ni" href="/" title="Signals">⚡</a>
+    <a class="ni" href="/static/bankroll.html" title="Bankroll">◈</a>
+    <a class="ni on" href="/static/backtest.html" title="Backtest">↗</a>
+    <div style="flex:1"></div>
+    <a class="ni" href="/static/model.html" title="Λ Model">λ</a>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="tb-name">Backtest</span>
+      <span class="tb-dot">·</span>
+      <span class="tb-meta">Historical analysis</span>
+      <div class="topbar-right">
+        <div class="live"><div class="live-dot"></div> Live</div>
+        <button class="theme-toggle" onclick="toggleTheme()">◑</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="eyebrow">Historical dataset</div>
+      <div class="hero-line"><span class="pos" id="hero-matches">—</span> matches</div>
+      <div class="hero-sub" id="hero-sub">across 16 EPL seasons · 2010–2026</div>
+
+      <div class="kpi-strip">
+        <div class="kpi"><div class="kpi-label">Seasons</div><div class="kpi-val" id="kpi-seasons">—</div><div class="kpi-sub">EPL seasons loaded</div></div>
+        <div class="kpi"><div class="kpi-label">Matches</div><div class="kpi-val" id="kpi-matches">—</div><div class="kpi-sub">Completed fixtures</div></div>
+        <div class="kpi"><div class="kpi-label">Signal replay</div><div class="kpi-val">v2</div><div class="kpi-sub">Per-GW replay coming</div></div>
+        <div class="kpi"><div class="kpi-label">Model</div><div class="kpi-val">v4.1</div><div class="kpi-sub">Poisson + DC + ELO</div></div>
+      </div>
+
+      <div class="sdiv"><span class="sdiv-label">Status</span><div class="sdiv-line"></div></div>
+      <div id="backtest-note" style="color:var(--text-2);font-size:14px;line-height:1.7;max-width:560px">
+        Loading…
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <div>
+        <div class="sb-label">Dataset</div>
+        <div class="sb-val">EPL 2010–2026</div>
+      </div>
+      <div class="sb-right">
+        <div><div class="sb-val" id="sb-seasons">—</div><div class="sb-label">Seasons</div></div>
+        <div><div class="sb-val" id="sb-matches">—</div><div class="sb-label">Matches</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/backtest.js"></script>
+</body>
+</html>

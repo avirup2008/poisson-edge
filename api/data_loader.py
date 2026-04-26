@@ -3,6 +3,7 @@ Data loading, CSV caching, and opponent-adjusted ratings.
 All logic here; api/main.py calls DataStore only.
 """
 import logging
+import os
 import time
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -15,7 +16,11 @@ from model.poisson_edge_model import compute_opponent_adjusted_ratings, ELO_RATI
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path(__file__).parent.parent / 'data' / 'cache'
+# Use /tmp on Vercel (project directory is read-only in serverless)
+if os.environ.get('VERCEL'):
+    CACHE_DIR = Path('/tmp/poisson-edge-cache')
+else:
+    CACHE_DIR = Path(__file__).parent.parent / 'data' / 'cache'
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 CURRENT_SEASON = '2526'

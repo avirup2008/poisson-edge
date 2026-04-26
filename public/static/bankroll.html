@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POISSON-EDGE — Bankroll</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/globals.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="logo">PE</div>
+    <a class="ni" href="/" title="Signals">⚡</a>
+    <a class="ni on" href="/static/bankroll.html" title="Bankroll">◈</a>
+    <a class="ni" href="/static/backtest.html" title="Backtest">↗</a>
+    <div style="flex:1"></div>
+    <a class="ni" href="/static/model.html" title="Λ Model">λ</a>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="tb-name">Bankroll</span>
+      <span class="tb-dot">·</span>
+      <span class="tb-meta">Season tracker</span>
+      <div class="topbar-right">
+        <div class="live"><div class="live-dot"></div> Live</div>
+        <button class="theme-toggle" onclick="toggleTheme()">◑</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="eyebrow">Current balance</div>
+      <div class="hero-line"><span class="g" id="hero-balance">€—</span></div>
+      <div class="hero-sub" id="hero-sub">Starting bankroll · P&amp;L this season</div>
+
+      <div class="kpi-strip">
+        <div class="kpi"><div class="kpi-label">ROI</div><div class="kpi-val" id="kpi-roi">—</div><div class="kpi-sub">Season return</div></div>
+        <div class="kpi"><div class="kpi-label">Bets placed</div><div class="kpi-val" id="kpi-bets">—</div><div class="kpi-sub">Total signals acted on</div></div>
+        <div class="kpi"><div class="kpi-label">Win rate</div><div class="kpi-val" id="kpi-winrate">—</div><div class="kpi-sub">ELEV + BET combined</div></div>
+        <div class="kpi"><div class="kpi-label">Avg stake</div><div class="kpi-val" id="kpi-avgstake">—</div><div class="kpi-sub">Per bet (Kelly 25%)</div></div>
+      </div>
+
+      <div class="sdiv"><span class="sdiv-label">Recent bets</span><div class="sdiv-line"></div></div>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:64px">Tier</th>
+            <th>Match</th>
+            <th style="width:80px">Stake</th>
+            <th style="width:72px;text-align:right">Result</th>
+            <th style="width:80px;text-align:right">P&amp;L</th>
+          </tr>
+        </thead>
+        <tbody id="bets-tbody"><tr><td colspan="5" style="color:var(--text-2);padding:24px 0">No bets recorded yet.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="statusbar">
+      <div>
+        <div class="sb-label">Max drawdown</div>
+        <div class="sb-val" id="sb-dd">—</div>
+      </div>
+      <div class="sb-right">
+        <div><div class="sb-val" id="sb-start">—</div><div class="sb-label">Starting</div></div>
+        <div><div class="sb-val" id="sb-pnl">—</div><div class="sb-label">P&amp;L</div></div>
+        <div><div class="sb-val" id="sb-total-bets">—</div><div class="sb-label">Total bets</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/bankroll.js"></script>
+</body>
+</html>

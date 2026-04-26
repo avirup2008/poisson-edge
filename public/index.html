@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POISSON-EDGE — Signal Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/globals.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="logo">PE</div>
+    <a class="ni on" href="/" title="Signals">⚡</a>
+    <a class="ni" href="/static/bankroll.html" title="Bankroll">◈</a>
+    <a class="ni" href="/static/backtest.html" title="Backtest">↗</a>
+    <div style="flex:1"></div>
+    <a class="ni" href="/static/model.html" title="Λ Model">λ</a>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="tb-name">Signal Board</span>
+      <span class="tb-dot">·</span>
+      <span class="tb-meta" id="gw-meta">Loading…</span>
+      <div class="topbar-right">
+        <div class="live"><div class="live-dot"></div> Live</div>
+        <button class="theme-toggle" onclick="toggleTheme()">◑</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="eyebrow">Elevated signals</div>
+      <div class="hero-line"><span class="g" id="elev-count">—</span> bets tonight</div>
+      <div class="hero-sub" id="hero-sub">EV ≥ +15% · probability ≥ 65% · all gates cleared</div>
+
+      <div class="sdiv"><span class="sdiv-label">★ Elevated</span><div class="sdiv-line"></div></div>
+      <div class="cards" id="elev-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-bottom:60px">
+        <div style="color:var(--text-2);padding:24px">Computing signals…</div>
+      </div>
+
+      <div class="sdiv"><span class="sdiv-label" id="all-label">All Signals</span><div class="sdiv-line"></div></div>
+      <table class="tbl" id="all-table">
+        <thead>
+          <tr>
+            <th style="width:72px">Tier</th>
+            <th>Match</th>
+            <th style="text-align:right;width:80px">EV</th>
+          </tr>
+        </thead>
+        <tbody id="all-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="statusbar">
+      <div>
+        <div class="sb-label">Gameweek</div>
+        <div class="sb-val" id="sb-gw">GW—</div>
+      </div>
+      <div class="sb-right">
+        <div><div class="sb-val" id="sb-avg-p">—</div><div class="sb-label">Avg Prob</div></div>
+        <div><div class="sb-val" id="sb-avg-ev">—</div><div class="sb-label">Avg EV</div></div>
+        <div><div class="sb-val" id="sb-stake">—</div><div class="sb-label">Total Stake</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/signals.js"></script>
+</body>
+</html>
