@@ -144,9 +144,12 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     }
     try:
         r = httpx.get(url, params=params, timeout=15)
+        print(f'[fixtures] OddsAPI status={r.status_code} remaining={r.headers.get("x-requests-remaining","?")} body_len={len(r.text)}')
         r.raise_for_status()
         events = r.json()
-    except Exception:
+        print(f'[fixtures] raw events from OddsAPI: {len(events)}')
+    except Exception as exc:
+        print(f'[fixtures] OddsAPI fetch error: {exc}')
         return []
 
     fixtures = [f for e in events for f in [_parse_event(e, df)] if f]
