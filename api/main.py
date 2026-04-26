@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from api.data_loader import DataStore, HISTORICAL_SEASONS
@@ -24,7 +22,6 @@ load_dotenv()
 
 store = DataStore()
 
-PUBLIC_DIR = Path(__file__).parent.parent / 'public'
 DATA_DIR = Path(__file__).parent.parent / 'data'
 FIXTURES_PATH = DATA_DIR / 'fixtures.json'
 BANKROLL_PATH = DATA_DIR / 'bankroll.json'
@@ -39,37 +36,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='POISSON-EDGE', version='4.1', lifespan=lifespan)
 
-# public/static/ is bundled with the lambda on Vercel and present locally
-if PUBLIC_DIR.exists():
-    app.mount('/static', StaticFiles(directory=str(PUBLIC_DIR / 'static')), name='static')
-
-
-@app.get('/')
-def root():
-    index = PUBLIC_DIR / 'index.html'
-    if index.exists():
-        return FileResponse(str(index))
-    return {'message': 'POISSON-EDGE API', 'version': '4.1', 'docs': '/docs'}
-
 
 @app.get('/health')
 def health():
     return {'status': 'ok', 'data_ready': store.ready}
-
-
-@app.get('/_debug')
-def debug():
-    import glob
-    here = Path(__file__)
-    pub = PUBLIC_DIR
-    return {
-        '__file__': str(here),
-        'public_dir': str(pub),
-        'public_exists': pub.exists(),
-        'index_exists': (pub / 'index.html').exists(),
-        'cwd': os.getcwd(),
-        'listing': glob.glob(str(pub / '**'), recursive=True)[:30],
-    }
 
 
 @app.get('/api/signals')
