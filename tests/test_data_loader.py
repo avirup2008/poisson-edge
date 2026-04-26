@@ -30,6 +30,7 @@ def test_load_season_csv_returns_dataframe(tmp_path, monkeypatch):
     csv_content = 'HomeTeam,AwayTeam,FTHG,FTAG\nArsenal,Chelsea,2,1\n'
     with patch('httpx.get') as mock_get:
         mock_get.return_value = MagicMock(status_code=200, text=csv_content)
+        mock_get.return_value.raise_for_status = MagicMock()  # explicit no-op
         df = load_season_csv('2526', ttl_hours=0)
     assert isinstance(df, pd.DataFrame)
     assert 'HomeTeam' in df.columns

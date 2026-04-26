@@ -2,6 +2,7 @@
 Data loading, CSV caching, and opponent-adjusted ratings.
 All logic here; api/main.py calls DataStore only.
 """
+import logging
 import time
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -11,6 +12,8 @@ import httpx
 import pandas as pd
 
 from model.poisson_edge_model import compute_opponent_adjusted_ratings, ELO_RATINGS
+
+logger = logging.getLogger(__name__)
 
 CACHE_DIR = Path(__file__).parent.parent / 'data' / 'cache'
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -58,15 +61,21 @@ def load_all_seasons() -> pd.DataFrame:
     """
     frames = []
 
-    current = load_season_csv(CURRENT_SEASON, ttl_hours=24)
-    frames.append(current)
+    try:
+        current = load_season_csv(CURRENT_SEASON, ttl_hours=24)
+        frames.append(current)
+    except Exception as exc:
+        logger.error("Failed to load current season %s: %s", CURRENT_SEASON, exc)
 
     for code in HISTORICAL_SEASONS:
         try:
             df = load_season_csv(code, ttl_hours=24 * 365 * 10)
             frames.append(df)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to load season %s: %s", code, exc)
+
+    if not frames:
+        raise RuntimeError("No season data could be loaded — check network and cache")
 
     combined = pd.concat(frames, ignore_index=True)
     required = {'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'}
