@@ -6,7 +6,7 @@ from typing import List, Dict, Optional
 
 import httpx
 
-from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match, _parse_pinnacle_event
+from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match
 
 _CACHE_FILE = Path('/tmp/poisson-edge-cache/fixtures_cache.json')
 _CACHE_TTL_HOURS = 6
@@ -18,6 +18,7 @@ _NAME_MAP = {
     'Tottenham Hotspur': 'Tottenham',
     'Wolverhampton Wanderers': 'Wolves',
     'Brighton & Hove Albion': 'Brighton',
+    'Brighton and Hove Albion': 'Brighton',
     'West Ham United': 'West Ham',
     'Newcastle United': 'Newcastle',
     'Nottingham Forest': "Nott'm Forest",
@@ -26,6 +27,8 @@ _NAME_MAP = {
     'Sheffield United': 'Sheffield United',
     'Ipswich Town': 'Ipswich',
     'Luton Town': 'Luton',
+    'Sunderland': 'Sunderland',
+    'Burnley': 'Burnley',
 }
 
 
@@ -59,17 +62,12 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
         dt = datetime.fromisoformat(commence.replace('Z', '+00:00'))
         date_str = dt.strftime('%Y-%m-%d')
     except (ValueError, AttributeError):
-        print(f'[parse_event] DATE FAIL: {raw_home} vs {raw_away} commence={commence!r}')
         return None
 
     odds = {}
-    bm_keys = [bm.get('key') for bm in event.get('bookmakers', [])]
-    print(f'[parse_event] {raw_home} vs {raw_away} date={date_str} bookmakers={bm_keys}')
     for bm in event.get('bookmakers', []):
         if bm.get('key') != 'pinnacle':
             continue
-        market_keys = [m.get('key') for m in bm.get('markets', [])]
-        print(f'[parse_event]   pinnacle markets={market_keys}')
         for market in bm.get('markets', []):
             key = market.get('key')
             outcomes = market.get('outcomes', [])
@@ -89,14 +87,8 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
                         odds['hw'] = o['price']
                     elif _fuzzy_match(o['name'], raw_away):
                         odds['aw'] = o['price']
-            elif key == 'btts':
-                yes = next((o for o in outcomes if o['name'] == 'Yes'), None)
-                if yes:
-                    odds['btts'] = yes['price']
 
-    print(f'[parse_event]   odds built={odds} hw_set={"hw" in odds} o25_set={"o25" in odds}')
     if not any(k in odds for k in ('hw', 'o25')):
-        print(f'[parse_event]   FILTERED OUT: {raw_home} vs {raw_away}')
         return None
 
     return {
@@ -141,18 +133,16 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     if cached is not None:
         return cached
 
-    # OddsAPI requires raw commas in markets — httpx URL-encodes them causing 422
+    # OddsAPI requires raw commas — httpx URL-encodes them causing 422.
+    # btts market is not supported by this endpoint.
     url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-           f'?apiKey={api_key}&bookmakers=pinnacle&markets=totals,h2h,btts'
+           f'?apiKey={api_key}&bookmakers=pinnacle&markets=h2h,totals'
            f'&oddsFormat=decimal&regions=eu')
     try:
         r = httpx.get(url, timeout=15)
-        print(f'[fixtures] OddsAPI status={r.status_code} remaining={r.headers.get("x-requests-remaining","?")} body_len={len(r.text)}')
         r.raise_for_status()
         events = r.json()
-        print(f'[fixtures] raw events from OddsAPI: {len(events)}')
-    except Exception as exc:
-        print(f'[fixtures] OddsAPI fetch error: {exc}')
+    except Exception:
         return []
 
     fixtures = [f for e in events for f in [_parse_event(e, df)] if f]

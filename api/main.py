@@ -62,9 +62,10 @@ def debug_odds() -> Dict:
     if not api_key:
         return {'error': 'ODDS_API_KEY not set', 'key_set': False}
 
-    # 1) Direct OddsAPI call — raw commas required, httpx encodes them causing 422
+    # 1) Direct OddsAPI call — raw commas required, httpx encodes them causing 422.
+    # btts market not supported by this endpoint.
     url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-           f'?apiKey={api_key}&bookmakers=pinnacle&markets=totals,h2h,btts'
+           f'?apiKey={api_key}&bookmakers=pinnacle&markets=h2h,totals'
            f'&oddsFormat=decimal&regions=eu')
     raw_error = None
     body = []
