@@ -54,24 +54,39 @@ def health():
 
 @app.get('/api/debug-odds')
 def debug_odds() -> Dict:
-    """Temporary: show raw OddsAPI response for diagnosis."""
+    """Temporary: show raw OddsAPI response + parse pipeline for diagnosis."""
     import httpx as _httpx
     from api.scrapers.odds import ODDS_API_BASE, EPL_KEY
+    from api.scrapers.fixtures import _parse_event, _normalise
     api_key = os.getenv('ODDS_API_KEY', '')
     if not api_key:
         return {'error': 'ODDS_API_KEY not set', 'key_set': False}
     url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
     params = {'apiKey': api_key, 'bookmakers': 'pinnacle',
-              'markets': 'h2h', 'oddsFormat': 'decimal', 'regions': 'eu'}
+              'markets': 'totals,h2h,btts', 'oddsFormat': 'decimal', 'regions': 'eu'}
     try:
         r = _httpx.get(url, params=params, timeout=15)
         body = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.text
+        if not isinstance(body, list):
+            return {'status_code': r.status_code, 'error_body': body}
+
+        # Run parse pipeline on first 3 events
+        parse_results = []
+        for e in body[:3]:
+            parsed = _parse_event(e, None)
+            parse_results.append({
+                'home': e.get('home_team'), 'away': e.get('away_team'),
+                'parsed': parsed,
+                'bookmaker_keys': [bm.get('key') for bm in e.get('bookmakers', [])],
+                'pinnacle_markets': [m.get('key') for bm in e.get('bookmakers', [])
+                                     if bm.get('key') == 'pinnacle'
+                                     for m in bm.get('markets', [])],
+            })
         return {
             'status_code': r.status_code,
             'remaining': r.headers.get('x-requests-remaining'),
-            'used': r.headers.get('x-requests-used'),
-            'event_count': len(body) if isinstance(body, list) else None,
-            'first_event': body[0] if isinstance(body, list) and body else body,
+            'event_count': len(body),
+            'parse_sample': parse_results,
             'key_prefix': api_key[:8] + '…',
         }
     except Exception as exc:
