@@ -24,7 +24,7 @@ load_dotenv()
 
 store = DataStore()
 
-FRONTEND_DIR = Path(__file__).parent.parent / 'frontend'
+PUBLIC_DIR = Path(__file__).parent.parent / 'public'
 DATA_DIR = Path(__file__).parent.parent / 'data'
 FIXTURES_PATH = DATA_DIR / 'fixtures.json'
 BANKROLL_PATH = DATA_DIR / 'bankroll.json'
@@ -39,17 +39,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='POISSON-EDGE', version='4.1', lifespan=lifespan)
 
-# Mount frontend as static files — must come AFTER app creation
-# Skip on Vercel: static files are served by Vercel CDN from public/
-if not os.environ.get('VERCEL') and FRONTEND_DIR.exists():
-    app.mount('/static', StaticFiles(directory=str(FRONTEND_DIR)), name='static')
+# public/static/ is bundled with the lambda on Vercel and present locally
+if PUBLIC_DIR.exists():
+    app.mount('/static', StaticFiles(directory=str(PUBLIC_DIR / 'static')), name='static')
 
 
 @app.get('/')
 def root():
-    if os.environ.get('VERCEL'):
-        return {'message': 'POISSON-EDGE API v4.1', 'docs': '/docs'}
-    index = FRONTEND_DIR / 'index.html'
+    index = PUBLIC_DIR / 'index.html'
     if index.exists():
         return FileResponse(str(index))
     return {'message': 'POISSON-EDGE API', 'version': '4.1', 'docs': '/docs'}
