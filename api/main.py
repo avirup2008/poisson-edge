@@ -60,13 +60,18 @@ def health():
 
 @app.get('/api/signals')
 def get_signals(gw: int = 35, bankroll: float = None) -> List[Dict]:
+    # gw parameter reserved for v2 per-gameweek filtering
+    # currently computes all fixtures in fixtures.json regardless of gw
     if not store.ready:
         raise HTTPException(503, 'Model not ready — data still loading')
 
     if not FIXTURES_PATH.exists():
         return []
 
-    fixtures = _json.loads(FIXTURES_PATH.read_text())
+    try:
+        fixtures = _json.loads(FIXTURES_PATH.read_text(encoding='utf-8'))
+    except (_json.JSONDecodeError, OSError) as exc:
+        raise HTTPException(422, f'fixtures.json unreadable: {exc}') from exc
     bl = bankroll or float(os.getenv('BANKROLL', '1000'))
 
     gw_signals = GWSignals(
@@ -109,7 +114,10 @@ def get_polymarket(home: str, away: str, date: str) -> Dict:
 def get_bankroll() -> Dict:
     if not BANKROLL_PATH.exists():
         return {'starting_bankroll': 1000.0, 'current_bankroll': 1000.0, 'bets': []}
-    return _json.loads(BANKROLL_PATH.read_text())
+    try:
+        return _json.loads(BANKROLL_PATH.read_text(encoding='utf-8'))
+    except (_json.JSONDecodeError, OSError):
+        return {'starting_bankroll': 1000.0, 'current_bankroll': 1000.0, 'bets': []}
 
 
 @app.get('/api/backtest')
