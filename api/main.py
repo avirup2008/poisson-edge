@@ -79,7 +79,12 @@ def get_signals(bankroll: float = None) -> List[Dict]:
     else:
         return []
 
-    bl = bankroll or float(os.getenv('BANKROLL', '1000'))
+    # Use live current bankroll from Blob (falls back to env var, then 1000)
+    if bankroll:
+        bl = bankroll
+    else:
+        br = blob.load_bankroll()
+        bl = br.get('current_bankroll') or float(os.getenv('BANKROLL', '1000'))
 
     gw_signals = GWSignals(
         fixtures=fixtures,
