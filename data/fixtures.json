@@ -1,0 +1,14 @@
+[
+  {
+    "home": "Arsenal",
+    "away": "Chelsea",
+    "date": "2026-04-26",
+    "markets": {
+      "o25": 1.90,
+      "btts": 1.80,
+      "hw": 2.10
+    },
+    "home_rest_days": 7,
+    "away_rest_days": 4
+  }
+]
