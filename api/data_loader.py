@@ -59,16 +59,30 @@ def load_season_csv(season_code: str, ttl_hours: float = 24 * 365) -> pd.DataFra
     return pd.read_csv(path, on_bad_lines='skip')
 
 
+def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop rows missing required columns and cast goal columns to int."""
+    required = {'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'}
+    df = df.dropna(subset=list(required))
+    df['FTHG'] = df['FTHG'].astype(int)
+    df['FTAG'] = df['FTAG'].astype(int)
+    return df
+
+
+def load_current_season() -> pd.DataFrame:
+    """Load and clean the current season CSV (24h TTL)."""
+    return _clean_df(load_season_csv(CURRENT_SEASON, ttl_hours=24))
+
+
 def load_all_seasons() -> pd.DataFrame:
     """
     Load and concatenate all seasons.
     Current season: 24h TTL. Historical: fetch once (TTL=10 years).
+    Used for backtest display and result-marking only — NOT for live ratings.
     """
     frames = []
 
     try:
-        current = load_season_csv(CURRENT_SEASON, ttl_hours=24)
-        frames.append(current)
+        frames.append(load_season_csv(CURRENT_SEASON, ttl_hours=24))
     except Exception as exc:
         logger.error("Failed to load current season %s: %s", CURRENT_SEASON, exc)
 
@@ -82,12 +96,7 @@ def load_all_seasons() -> pd.DataFrame:
     if not frames:
         raise RuntimeError("No season data could be loaded — check network and cache")
 
-    combined = pd.concat(frames, ignore_index=True)
-    required = {'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG'}
-    combined = combined.dropna(subset=list(required))
-    combined['FTHG'] = combined['FTHG'].astype(int)
-    combined['FTAG'] = combined['FTAG'].astype(int)
-    return combined
+    return _clean_df(pd.concat(frames, ignore_index=True))
 
 
 def compute_ratings(df: pd.DataFrame) -> Tuple[Dict, Dict]:
@@ -99,9 +108,21 @@ def compute_ratings(df: pd.DataFrame) -> Tuple[Dict, Dict]:
 class DataStore:
     """
     Singleton-style store initialised at FastAPI startup.
-    Holds historical data + pre-computed ratings in memory.
+
+    Two DataFrames are maintained deliberately:
+      current_season  — 2025-26 data only.  Used for opponent-adjusted ratings
+                        and the form blend inside calculate_lambdas().  Passing
+                        only current-season data prevents stale multi-season
+                        averages from inflating ratings for teams whose form has
+                        changed dramatically (e.g. a relegated side).
+      historical      — All 16 seasons concatenated.  Used for backtest display
+                        (/api/backtest total_matches) and auto_mark_results().
+
+    ELO ratings are pre-computed from the full 16-season history and stored as
+    a constant in poisson_edge_model.py — they are not recomputed here.
     """
     historical: pd.DataFrame = field(default_factory=pd.DataFrame)
+    current_season: pd.DataFrame = field(default_factory=pd.DataFrame)
     g_atk: Dict = field(default_factory=dict)
     g_def: Dict = field(default_factory=dict)
     elo_ratings: Dict = field(default_factory=lambda: dict(ELO_RATINGS))
@@ -109,7 +130,24 @@ class DataStore:
     def load(self) -> None:
         """Called once at startup. Downloads CSVs if needed, computes ratings."""
         self.historical = load_all_seasons()
-        self.g_atk, self.g_def = compute_ratings(self.historical)
+
+        # Opponent-adjusted ratings from current season only.
+        # Falls back to full history if current season has too few rows (<10).
+        try:
+            cs = load_current_season()
+            if len(cs) >= 10:
+                self.current_season = cs
+            else:
+                logger.warning(
+                    "Current season has only %d rows — falling back to full history for ratings",
+                    len(cs),
+                )
+                self.current_season = self.historical
+        except Exception as exc:
+            logger.error("Failed to load current season for ratings: %s — using full history", exc)
+            self.current_season = self.historical
+
+        self.g_atk, self.g_def = compute_ratings(self.current_season)
 
     @property
     def ready(self) -> bool:

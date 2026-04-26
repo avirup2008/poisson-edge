@@ -152,7 +152,7 @@ def get_signals(bankroll: float = None) -> List[Dict]:
 
     gw_signals = GWSignals(
         fixtures=fixtures,
-        historical=store.historical,
+        historical=store.current_season,  # current season only — avoids stale multi-season ratings
         g_atk=store.g_atk,
         g_def=store.g_def,
         bankroll=bl,
