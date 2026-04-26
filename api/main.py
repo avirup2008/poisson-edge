@@ -17,10 +17,12 @@ from api.scrapers.table import fetch_table
 from api.scrapers.injuries import fetch_injuries
 from api.scrapers.odds import fetch_pinnacle_odds
 from api.scrapers.polymarket import fetch_polymarket_prob
+from api.scrapers.fixtures import fetch_upcoming_fixtures, force_refresh
 
 load_dotenv()
 
 store = DataStore()
+_live_fixtures: List[Dict] = []
 
 DATA_DIR = Path(__file__).parent.parent / 'data'
 FIXTURES_PATH = DATA_DIR / 'fixtures.json'
@@ -29,8 +31,12 @@ BANKROLL_PATH = DATA_DIR / 'bankroll.json'
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Download CSVs and compute ratings at startup."""
+    """Download CSVs, compute ratings, then fetch live fixtures."""
+    global _live_fixtures
     store.load()
+    api_key = os.getenv('ODDS_API_KEY', '')
+    if api_key:
+        _live_fixtures = fetch_upcoming_fixtures(api_key, store.historical)
     yield
 
 
@@ -42,19 +48,33 @@ def health():
     return {'status': 'ok', 'data_ready': store.ready}
 
 
+@app.get('/api/refresh-fixtures')
+def refresh_fixtures() -> Dict:
+    """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""
+    global _live_fixtures
+    api_key = os.getenv('ODDS_API_KEY', '')
+    if not api_key:
+        raise HTTPException(400, 'ODDS_API_KEY not configured')
+    _live_fixtures = force_refresh(api_key, store.historical)
+    return {'fixtures_loaded': len(_live_fixtures), 'source': 'oddsapi'}
+
+
 @app.get('/api/signals')
 def get_signals(bankroll: float = None) -> List[Dict]:
-    # gw: reserved for v2 per-GW filtering. Currently ignored — all fixtures in fixtures.json are processed.
     if not store.ready:
         raise HTTPException(503, 'Model not ready — data still loading')
 
-    if not FIXTURES_PATH.exists():
+    # Prefer live fixtures fetched from OddsAPI; fall back to committed fixtures.json
+    if _live_fixtures:
+        fixtures = _live_fixtures
+    elif FIXTURES_PATH.exists():
+        try:
+            fixtures = _json.loads(FIXTURES_PATH.read_text(encoding='utf-8'))
+        except (_json.JSONDecodeError, OSError) as exc:
+            raise HTTPException(422, f'fixtures.json unreadable: {exc}') from exc
+    else:
         return []
 
-    try:
-        fixtures = _json.loads(FIXTURES_PATH.read_text(encoding='utf-8'))
-    except (_json.JSONDecodeError, OSError) as exc:
-        raise HTTPException(422, f'fixtures.json unreadable: {exc}') from exc
     bl = bankroll or float(os.getenv('BANKROLL', '1000'))
 
     gw_signals = GWSignals(
