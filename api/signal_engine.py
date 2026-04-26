@@ -72,6 +72,10 @@ def compute_signal(
     home_atk_mult: float = 1.0, away_atk_mult: float = 1.0,
     home_def_boost: float = 1.0, away_def_boost: float = 1.0,
 ) -> SignalResult:
+    # Fix 3: validate market key before any computation
+    if market not in MARKET_KEYS:
+        raise ValueError(f"Unknown market: {market!r}")
+
     lh, la = calculate_lambdas(
         home, away, historical, g_atk, g_def,
         home_rest_days, away_rest_days,
@@ -82,7 +86,8 @@ def compute_signal(
     probs = extract_probabilities(matrix)
 
     if market == 'hw':
-        model_p = apply_elo_ensemble(probs['hw'], home, away, elo_ratings)
+        # Fix 2: ensure elo_ratings is never None for hw market
+        model_p = apply_elo_ensemble(probs['hw'], home, away, elo_ratings or dict(ELO_RATINGS))
     else:
         model_p = probs.get(market, 0.0)
 

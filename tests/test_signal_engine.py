@@ -27,14 +27,17 @@ def test_compute_signal_returns_signal_result():
     assert isinstance(result.model_p, float)
 
 def test_compute_signal_kelly_zero_for_no_tier():
+    # Fix 1: use odds=1.01 (99% implied probability) so EV is deeply negative
+    # at any realistic model_p < 0.99, guaranteeing classify_signal returns 'NO'.
+    # This makes the NO tier deterministic rather than relying on the model's output.
     result = compute_signal(
         home='Arsenal', away='Chelsea',
-        market='o25', odds=1.05,
+        market='o25', odds=1.01,
         historical=MINIMAL_DF, g_atk=MINIMAL_ATK, g_def=MINIMAL_DEF,
         bankroll=1000.0,
     )
     assert result.tier == 'NO'
-    assert result.kelly_stake == 0.0
+    assert result.kelly_stake == 0.0  # the real invariant: NO tier always yields zero stake
 
 def test_gw_signals_structure():
     fixtures = [
@@ -51,3 +54,6 @@ def test_gw_signals_structure():
     results = gw.compute()
     assert isinstance(results, list)
     assert all(isinstance(r, SignalResult) for r in results)
+    # Fix 4: results must be sorted descending by ev_pct
+    if len(results) >= 2:
+        assert results[0].ev_pct >= results[-1].ev_pct
