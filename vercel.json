@@ -6,22 +6,10 @@
       "use": "@vercel/python"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "main.py"
-    },
-    {
-      "src": "/health",
-      "dest": "main.py"
-    },
-    {
-      "src": "/docs",
-      "dest": "main.py"
-    },
-    {
-      "src": "/openapi.json",
-      "dest": "main.py"
-    }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/main.py" },
+    { "source": "/health", "destination": "/main.py" },
+    { "source": "/docs", "destination": "/main.py" },
+    { "source": "/openapi.json", "destination": "/main.py" }
   ]
 }
