@@ -59,12 +59,17 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
         dt = datetime.fromisoformat(commence.replace('Z', '+00:00'))
         date_str = dt.strftime('%Y-%m-%d')
     except (ValueError, AttributeError):
+        print(f'[parse_event] DATE FAIL: {raw_home} vs {raw_away} commence={commence!r}')
         return None
 
     odds = {}
+    bm_keys = [bm.get('key') for bm in event.get('bookmakers', [])]
+    print(f'[parse_event] {raw_home} vs {raw_away} date={date_str} bookmakers={bm_keys}')
     for bm in event.get('bookmakers', []):
         if bm.get('key') != 'pinnacle':
             continue
+        market_keys = [m.get('key') for m in bm.get('markets', [])]
+        print(f'[parse_event]   pinnacle markets={market_keys}')
         for market in bm.get('markets', []):
             key = market.get('key')
             outcomes = market.get('outcomes', [])
@@ -89,7 +94,9 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
                 if yes:
                     odds['btts'] = yes['price']
 
+    print(f'[parse_event]   odds built={odds} hw_set={"hw" in odds} o25_set={"o25" in odds}')
     if not any(k in odds for k in ('hw', 'o25')):
+        print(f'[parse_event]   FILTERED OUT: {raw_home} vs {raw_away}')
         return None
 
     return {
