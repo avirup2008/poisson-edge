@@ -29,11 +29,31 @@ def _build_slug(home: str, away: str, date: str) -> str:
 
 def _parse_probability(html: str, home: str) -> Optional[float]:
     soup = BeautifulSoup(html, 'lxml')
-    text = soup.get_text()
-    matches = re.findall(r'(\d{1,3})%', text)
-    if matches:
+    text = soup.get_text(' ')
+
+    # Try to find a percentage near the home team name
+    home_clean = home.lower()
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    for i, line in enumerate(lines):
+        if home_clean in line.lower():
+            # Look for a percentage in this line or the next 2 lines
+            window = ' '.join(lines[i:i+3])
+            pcts = re.findall(r'(\d{1,3})%', window)
+            if pcts:
+                try:
+                    p = float(pcts[0]) / 100
+                    if 0.0 < p < 1.0:
+                        return p
+                except ValueError:
+                    pass
+
+    # Fallback: first valid percentage on page (documented as unreliable)
+    all_pcts = re.findall(r'(\d{1,3})%', text)
+    for pct in all_pcts:
         try:
-            return float(matches[0]) / 100
+            p = float(pct) / 100
+            if 0.05 < p < 0.95:  # filter out obvious UI percentages (100%, 0%)
+                return p
         except ValueError:
-            return None
+            continue
     return None

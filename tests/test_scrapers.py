@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from api.scrapers.table import fetch_table
 from api.scrapers.injuries import fetch_injuries
-from api.scrapers.odds import fetch_pinnacle_odds
+from api.scrapers.odds import fetch_pinnacle_odds, _fuzzy_match
 from api.scrapers.polymarket import fetch_polymarket_prob
 
 BBC_TABLE_HTML = """
@@ -63,3 +63,8 @@ def test_fetch_injuries_returns_list():
         mock.return_value.raise_for_status = MagicMock()
         injuries = fetch_injuries('Arsenal')
     assert isinstance(injuries, list)
+
+def test_fuzzy_match_distinguishes_manchester_clubs():
+    assert _fuzzy_match('Manchester City', 'Manchester City') is True
+    assert _fuzzy_match('Man City', 'Manchester City') is True
+    assert _fuzzy_match('Manchester United', 'Manchester City') is False

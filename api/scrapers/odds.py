@@ -32,8 +32,24 @@ def fetch_pinnacle_odds(home: str, away: str, api_key: str) -> Dict:
 
 
 def _fuzzy_match(a: str, b: str) -> bool:
-    return (a.lower().replace(' ', '') in b.lower().replace(' ', '') or
-            b.lower().replace(' ', '') in a.lower().replace(' ', ''))
+    a_tokens = a.lower().split()
+    b_tokens = b.lower().split()
+
+    def tokens_match(t1, t2):
+        """True if t1 token matches t2 token (exact or prefix)."""
+        return t1 == t2 or t1.startswith(t2) or t2.startswith(t1)
+
+    # Count how many tokens in the shorter list match a token in the longer list
+    if len(a_tokens) <= len(b_tokens):
+        shorter, longer = a_tokens, b_tokens
+    else:
+        shorter, longer = b_tokens, a_tokens
+
+    if not shorter:
+        return False
+
+    matched = sum(1 for t in shorter if any(tokens_match(t, u) for u in longer))
+    return matched > 0 and matched / len(shorter) > 0.5
 
 
 def _parse_pinnacle_event(event: Dict) -> Dict:
