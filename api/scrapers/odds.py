@@ -61,8 +61,21 @@ def _parse_pinnacle_event(event: Dict) -> Dict:
             key = market.get('key')
             outcomes = {o['name']: o['price'] for o in market.get('outcomes', [])}
             if key == 'totals':
-                result['o25'] = outcomes.get('Over')
-                result['u25'] = outcomes.get('Under')
+                # Filter to 2.5-goal line only
+                over_2_5 = next(
+                    (o for o in market.get('outcomes', [])
+                     if o['name'] == 'Over' and abs(o.get('point', 2.5) - 2.5) < 0.01),
+                    None
+                )
+                under_2_5 = next(
+                    (o for o in market.get('outcomes', [])
+                     if o['name'] == 'Under' and abs(o.get('point', 2.5) - 2.5) < 0.01),
+                    None
+                )
+                if over_2_5:
+                    result['o25'] = over_2_5['price']
+                if under_2_5:
+                    result['u25'] = under_2_5['price']
             elif key == 'h2h':
                 result['hw'] = outcomes.get(event.get('home_team'))
                 result['aw'] = outcomes.get(event.get('away_team'))

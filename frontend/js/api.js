@@ -1,7 +1,7 @@
 // Thin fetch wrappers for all POISSON-EDGE API endpoints
 const API = {
-  async signals(gw = 35) {
-    const r = await fetch(`/api/signals?gw=${gw}`);
+  async signals() {
+    const r = await fetch('/api/signals');
     if (!r.ok) throw new Error(`signals: ${r.status}`);
     return r.json();
   },

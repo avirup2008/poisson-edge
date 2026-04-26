@@ -15,5 +15,8 @@ async function loadBacktest() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadBacktest().catch(console.error);
+  loadBacktest().catch(err => {
+    document.getElementById('backtest-note').innerHTML =
+      `<span style="color:var(--red)">Error loading backtest data: ${err.message}</span>`;
+  });
 });

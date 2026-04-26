@@ -38,5 +38,8 @@ async function loadModel() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadModel().catch(console.error);
+  loadModel().catch(err => {
+    document.getElementById('param-grid').innerHTML =
+      `<div style="color:var(--red);padding:24px">Error loading model data: ${err.message}</div>`;
+  });
 });

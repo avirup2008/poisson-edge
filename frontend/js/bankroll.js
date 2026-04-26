@@ -62,5 +62,8 @@ async function loadBankroll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadBankroll().catch(console.error);
+  loadBankroll().catch(err => {
+    document.getElementById('bets-tbody').innerHTML =
+      `<tr><td colspan="5" style="color:var(--red);padding:24px 0">Error loading bankroll: ${err.message}</td></tr>`;
+  });
 });

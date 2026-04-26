@@ -59,9 +59,8 @@ def health():
 
 
 @app.get('/api/signals')
-def get_signals(gw: int = 35, bankroll: float = None) -> List[Dict]:
-    # gw parameter reserved for v2 per-gameweek filtering
-    # currently computes all fixtures in fixtures.json regardless of gw
+def get_signals(bankroll: float = None) -> List[Dict]:
+    # gw: reserved for v2 per-GW filtering. Currently ignored — all fixtures in fixtures.json are processed.
     if not store.ready:
         raise HTTPException(503, 'Model not ready — data still loading')
 
