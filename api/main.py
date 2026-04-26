@@ -52,6 +52,32 @@ def health():
     return {'status': 'ok', 'data_ready': store.ready}
 
 
+@app.get('/api/debug-odds')
+def debug_odds() -> Dict:
+    """Temporary: show raw OddsAPI response for diagnosis."""
+    import httpx as _httpx
+    from api.scrapers.odds import ODDS_API_BASE, EPL_KEY
+    api_key = os.getenv('ODDS_API_KEY', '')
+    if not api_key:
+        return {'error': 'ODDS_API_KEY not set', 'key_set': False}
+    url = f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
+    params = {'apiKey': api_key, 'bookmakers': 'pinnacle',
+              'markets': 'h2h', 'oddsFormat': 'decimal', 'regions': 'eu'}
+    try:
+        r = _httpx.get(url, params=params, timeout=15)
+        body = r.json() if r.headers.get('content-type', '').startswith('application/json') else r.text
+        return {
+            'status_code': r.status_code,
+            'remaining': r.headers.get('x-requests-remaining'),
+            'used': r.headers.get('x-requests-used'),
+            'event_count': len(body) if isinstance(body, list) else None,
+            'first_event': body[0] if isinstance(body, list) and body else body,
+            'key_prefix': api_key[:8] + '…',
+        }
+    except Exception as exc:
+        return {'error': str(exc)}
+
+
 @app.get('/api/refresh-fixtures')
 def refresh_fixtures() -> Dict:
     """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""
