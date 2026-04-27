@@ -12,6 +12,7 @@
   --gold-dim:  rgba(201,168,76,0.10);
   --green:     #22C55E;
   --red:       #EF4444;
+  --blue:      #60A5FA;
 }
 
 html[data-theme="light"] {
@@ -37,7 +38,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-width: 960px;
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 html[data-theme="light"] body {
@@ -101,7 +102,7 @@ html[data-theme="light"] .live-dot { background: #1D4A35; }
 .theme-toggle:hover { background: var(--surface-2); color: var(--text-1); }
 
 /* Content */
-.content { flex: 1; overflow-y: auto; padding: 52px 56px 40px; }
+.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Hero */
 .eyebrow { font-size: 11px; font-weight: 500; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 14px; }
@@ -136,10 +137,11 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
 .tb-elev { color: var(--gold); background: var(--gold-dim); }
 .tb-bet  { color: var(--green); background: rgba(34,197,94,0.09); }
 .tb-sim  { color: var(--text-2); background: var(--surface-2); }
-.tb-no   { color: var(--text-3); border: 1px solid var(--border-s); }
+.tb-no      { color: var(--text-3); border: 1px solid var(--border-s); }
+.tb-suspect { color: var(--red); background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); }
 
 /* Status bar */
-.statusbar { height: 52px; border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 56px; gap: 32px; flex-shrink: 0; }
+.statusbar { display:flex; align-items:center; justify-content:space-between; height:48px; padding:0 32px; gap:24px; border-top:1px solid var(--surface-2); font-size:11px; color:var(--text-2); flex-shrink:0; }
 .sb-label { font-size: 10px; font-weight: 500; color: var(--text-3); letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 1px; }
 .sb-val   { font-size: 14px; font-weight: 600; }
 .sb-right { margin-left: auto; display: flex; gap: 32px; }
@@ -168,3 +170,485 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
 
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
 .elev-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); animation: blink 2.5s ease-in-out infinite; display: inline-block; }
+
+/* ── Signal Board Redesign ─────────────────────────────────────── */
+
+/* Layout */
+.elev-section {
+  flex-shrink: 0;
+  padding: 20px 32px 0;
+}
+
+.elev-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+
+.elev-section-header .elev-count {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.elev-cards-row {
+  display: flex;
+  gap: 16px;
+}
+
+.feed-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 32px 8px;
+}
+
+/* Statusbar items */
+.sb-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-label {
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.sb-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.sb-val.gold { color: var(--gold); }
+.sb-val.green { color: var(--green); }
+
+.sb-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--surface-2);
+}
+
+/* ELEV card */
+.elev-card {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ec-match {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.ec-meta {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.ec-kickoff {
+  font-size: 11px;
+  color: var(--text-2);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ec-ev-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.ec-ev-big {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.ec-ev-label {
+  font-size: 9px;
+  color: var(--text-2);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.ec-prob-block {
+  text-align: right;
+}
+
+.ec-prob-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green);
+  line-height: 1;
+}
+
+.ec-prob-label {
+  font-size: 9px;
+  color: var(--text-2);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Edge bar (shared by ELEV card and expand panel) */
+.edge-bar-wrap {
+  background: rgba(255,255,255,.04);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.edge-bar-label {
+  font-size: 10px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.edge-bar-label .pp-edge {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.edge-bar-track {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.edge-bar-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 4px;
+  transition: width .4s ease;
+}
+
+.edge-bar-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: #fff;
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.edge-bar-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-2);
+}
+
+/* Data cells row (λH, λA, odds, edge) */
+.ec-data-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ec-data-cell {
+  flex: 1;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.ec-data-cell .dc-label {
+  font-size: 9px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.ec-data-cell .dc-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e5e7eb;
+  margin-top: 2px;
+}
+
+.dc-val.green { color: var(--green); }
+
+/* Gate chips */
+.gate-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gate-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 99px;
+  border: 1px solid;
+}
+
+.gate-chip.pass {
+  color: var(--green);
+  border-color: rgba(34,197,94,.3);
+  background: rgba(34,197,94,.08);
+}
+
+.gate-chip.warn {
+  color: var(--gold);
+  border-color: rgba(201,168,76,.3);
+  background: rgba(201,168,76,.08);
+}
+
+.gate-chip.fail {
+  color: var(--red);
+  border-color: rgba(239,68,68,.3);
+  background: rgba(239,68,68,.08);
+}
+
+/* ELEV card footer */
+.ec-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.ec-kelly {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.ec-kelly span {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+/* Feed section */
+.feed-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+
+.feed-group-header .fg-count {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.feed-group-header .fg-line {
+  flex: 1;
+  height: 1px;
+  background: var(--surface-2);
+}
+
+/* Feed row wrapper */
+.feed-row-wrap {
+  border-radius: 8px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color .15s;
+}
+
+.feed-row-wrap:hover {
+  border-color: var(--surface-2);
+}
+
+.feed-row-wrap.tier-bet {
+  background: rgba(34,197,94,.025);
+}
+
+.feed-row-wrap.tier-sim,
+.feed-row-wrap.tier-no,
+.feed-row-wrap.tier-elev-feed {
+  opacity: .55;
+}
+
+.feed-row-wrap.tier-sim:hover,
+.feed-row-wrap.tier-no:hover,
+.feed-row-wrap.tier-elev-feed:hover {
+  opacity: 1;
+}
+
+/* Feed row collapsed grid */
+.feed-row {
+  display: grid;
+  grid-template-columns: 38px 1fr 72px 44px 44px 56px 60px 20px;
+  align-items: center;
+  gap: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.f-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.f-badge.elev { background: rgba(201,168,76,.15); color: var(--gold); }
+.f-badge.bet  { background: rgba(34,197,94,.15);  color: var(--green); }
+.f-badge.sim  { background: rgba(255,255,255,.06); color: var(--text-2); }
+.f-badge.no   { background: rgba(239,68,68,.1);   color: var(--red); }
+
+.f-match {
+  overflow: hidden;
+}
+
+.f-match-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.f-match-sub {
+  font-size: 10px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.f-lambda {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 10px;
+  color: var(--text-2);
+  gap: 1px;
+}
+
+.f-lambda span {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.f-prob, .f-odds, .f-ev, .f-kelly {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.f-ev { color: var(--gold); }
+
+.f-chevron {
+  text-align: right;
+  color: var(--text-2);
+  font-size: 14px;
+  transition: transform .2s;
+}
+
+.feed-row-wrap.expanded .f-chevron {
+  transform: rotate(90deg);
+}
+
+/* Expand panel */
+.expand-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .25s ease;
+  background: rgba(255,255,255,.02);
+  border-top: 1px solid transparent;
+}
+
+.feed-row-wrap.expanded .expand-panel {
+  max-height: 360px;
+  border-top-color: var(--surface-2);
+}
+
+.expand-inner {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Expand footer (BET/ELEV only) */
+.expand-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.expand-kelly {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.expand-kelly span {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+/* Log Bet button */
+.btn-log-bet {
+  background: var(--gold);
+  color: #0d0f13;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.btn-log-bet:hover { opacity: .85; }
