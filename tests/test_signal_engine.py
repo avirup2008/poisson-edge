@@ -41,9 +41,6 @@ def test_compute_signal_kelly_zero_for_no_tier():
 
 def test_signal_result_has_date(monkeypatch):
     """SignalResult.date is propagated from the fixture dict."""
-    import pandas as pd
-    from api.signal_engine import GWSignals
-
     FIXTURES = [{
         "home": "Arsenal", "away": "Chelsea",
         "date": "2026-05-10",
@@ -68,6 +65,33 @@ def test_signal_result_has_date(monkeypatch):
     assert len(results) > 0, "Expected at least one result"
     assert all(r.date == "2026-05-10" for r in results), \
         f"Expected date='2026-05-10' on all results, got: {[r.date for r in results]}"
+
+
+def test_signal_result_date_none_when_missing():
+    """SignalResult.date is None when fixture has no date key."""
+    historical = pd.DataFrame({
+        "HomeTeam": ["Arsenal"] * 20 + ["Chelsea"] * 20,
+        "AwayTeam": ["Chelsea"] * 20 + ["Arsenal"] * 20,
+        "FTHG": [1] * 40, "FTAG": [1] * 40,
+        "Season": ["2324"] * 40,
+    })
+    FIXTURES_NO_DATE = [{
+        "home": "Arsenal", "away": "Chelsea",
+        "markets": {"o25": 1.90},
+        "h2h": {"home": 2.10, "away": 3.50, "draw": 3.20},
+        "totals": {},
+    }]
+    gw = GWSignals(
+        fixtures=FIXTURES_NO_DATE,
+        historical=historical,
+        g_atk={}, g_def={},
+        bankroll=1000,
+        elo_ratings={},
+    )
+    results = gw.compute()
+    assert len(results) > 0
+    assert all(r.date is None for r in results), \
+        f"Expected date=None for all results, got: {[r.date for r in results]}"
 
 
 def test_gw_signals_structure():
