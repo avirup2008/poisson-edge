@@ -140,6 +140,58 @@ def debug_odds() -> Dict:
     }
 
 
+@app.get('/api/debug-sofascore')
+def debug_sofascore() -> Dict:
+    """Diagnose Sofascore odds scraper — shows raw status codes and response snippets."""
+    import httpx as _httpx
+    from api.scrapers.sofascore_odds import _HEADERS, _TOURNAMENT_ID, _SEASON_ID, _frac_to_dec
+
+    results = {}
+
+    # Step 1: fetch round 36 fixtures list
+    round_url = (
+        f'https://api.sofascore.com/api/v1/unique-tournament/'
+        f'{_TOURNAMENT_ID}/season/{_SEASON_ID}/events/round/36'
+    )
+    try:
+        r = _httpx.get(round_url, headers=_HEADERS, timeout=10)
+        events = r.json().get('events', []) if r.status_code == 200 else []
+        first_eid = events[0].get('id') if events else None
+        results['round36'] = {
+            'status': r.status_code,
+            'event_count': len(events),
+            'first_event_id': first_eid,
+            'first_home': events[0].get('homeTeam', {}).get('name') if events else None,
+            'first_away': events[0].get('awayTeam', {}).get('name') if events else None,
+        }
+    except Exception as exc:
+        results['round36'] = {'error': str(exc)}
+        first_eid = None
+
+    # Step 2: fetch odds for that event
+    if first_eid:
+        odds_url = f'https://api.sofascore.com/api/v1/event/{first_eid}/odds/1/all'
+        try:
+            r2 = _httpx.get(odds_url, headers=_HEADERS, timeout=10)
+            body = r2.json() if r2.status_code == 200 else {}
+            markets = body.get('markets', [])
+            ft = next((m for m in markets if m.get('marketName') == 'Full time'), None)
+            results['odds'] = {
+                'status': r2.status_code,
+                'market_count': len(markets),
+                'market_names': [m.get('marketName') for m in markets[:5]],
+                'full_time_found': ft is not None,
+                'choices': ft.get('choices', []) if ft else [],
+                'raw_snippet': str(body)[:500],
+            }
+        except Exception as exc:
+            results['odds'] = {'error': str(exc)}
+    else:
+        results['odds'] = {'skipped': 'no event_id from round fetch'}
+
+    return results
+
+
 @app.get('/api/refresh-fixtures')
 def refresh_fixtures() -> Dict:
     """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""
