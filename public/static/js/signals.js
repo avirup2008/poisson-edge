@@ -235,6 +235,11 @@ function renderElevCard(sig, globalIdx, promoted = false) {
 
       <div class="gate-chips">${renderGateChips(gates)}</div>
 
+      <div class="inj-section" data-home="${sig.home}" data-away="${sig.away}">
+        <div class="inj-label">Absences</div>
+        <div class="inj-loading">Loading…</div>
+      </div>
+
       <div class="ec-footer">
         <div class="ec-kelly">Kelly 25% · <span>€${stake}</span></div>
         <button class="btn-log-bet" onclick="event.stopPropagation();openLogBetModal('${globalIdx}')">
@@ -247,6 +252,31 @@ function renderElevCard(sig, globalIdx, promoted = false) {
 
 // ── Feed Row ────────────────────────────────────────────────────
 
+/**
+ * Shared injury loader. Accepts an .inj-section element, fetches both teams,
+ * and injects the result. Guards against double-fetch with dataset.loaded.
+ */
+function loadInjurySection(injDiv) {
+  if (!injDiv || injDiv.dataset.loaded) return;
+  const home = injDiv.dataset.home;
+  const away = injDiv.dataset.away;
+  injDiv.dataset.loaded = '1';
+  Promise.all([
+    fetch(`/api/injuries/${encodeURIComponent(home)}`).then(r => r.json()).catch(() => []),
+    fetch(`/api/injuries/${encodeURIComponent(away)}`).then(r => r.json()).catch(() => []),
+  ]).then(([homeInj, awayInj]) => {
+    const fmt = (team, injs) => {
+      if (!injs || !injs.length) return '';
+      const names = injs.slice(0, 4).map(i => i.player || i.name || '?').join(', ');
+      return `<div class="inj-row"><span class="inj-team">${team}:</span> ${names}${injs.length > 4 ? ` +${injs.length - 4} more` : ''}</div>`;
+    };
+    const html = fmt(home, homeInj) + fmt(away, awayInj);
+    injDiv.innerHTML = html
+      ? `<div class="inj-label">Absences</div>${html}`
+      : '<div class="inj-row" style="color:var(--text-3)">No confirmed absences</div>';
+  });
+}
+
 function toggleRow(wrap) {
   document.querySelectorAll('.feed-row-wrap.expanded').forEach(el => {
     if (el !== wrap) el.classList.remove('expanded');
@@ -255,24 +285,7 @@ function toggleRow(wrap) {
 
   // Lazy-load injuries when row opens
   if (wrap.classList.contains('expanded')) {
-    const injDiv = wrap.querySelector('.inj-section');
-    if (injDiv && !injDiv.dataset.loaded) {
-      const home = injDiv.dataset.home;
-      const away = injDiv.dataset.away;
-      injDiv.dataset.loaded = '1';
-      Promise.all([
-        fetch(`/api/injuries/${encodeURIComponent(home)}`).then(r => r.json()).catch(() => []),
-        fetch(`/api/injuries/${encodeURIComponent(away)}`).then(r => r.json()).catch(() => []),
-      ]).then(([homeInj, awayInj]) => {
-        const fmt = (team, injs) => {
-          if (!injs || !injs.length) return '';
-          const names = injs.slice(0, 4).map(i => i.player || i.name || '?').join(', ');
-          return `<div class="inj-row"><span class="inj-team">${team}:</span> ${names}${injs.length > 4 ? ` +${injs.length - 4} more` : ''}</div>`;
-        };
-        const html = fmt(home, homeInj) + fmt(away, awayInj);
-        injDiv.innerHTML = html || '<div class="inj-row" style="color:var(--text-3)">No confirmed absences</div>';
-      });
-    }
+    loadInjurySection(wrap.querySelector('.inj-section'));
   }
 }
 
@@ -423,6 +436,8 @@ function renderBoard(signals, bankroll) {
         const gi = sorted.indexOf(s);
         return renderElevCard(s, gi, isPromoted);
       }).join('');
+      // Auto-fetch injuries for always-visible ELEV cards
+      elevRow.querySelectorAll('.inj-section').forEach(loadInjurySection);
     }
   }
 
