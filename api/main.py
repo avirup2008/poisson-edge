@@ -142,88 +142,101 @@ def debug_odds() -> Dict:
 
 @app.get('/api/debug-sources')
 def debug_sources() -> Dict:
-    """Test alternative data sources — ESPN event-level injuries and FotMob match details."""
+    """Dig into ESPN event summary rosters (injuries) and pickcenter (odds) for Chelsea vs Forest."""
     import httpx as _httpx
     results = {}
 
-    espn_headers = {
+    H = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json',
     }
-    fotmob_headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'x-mas-locale': 'en_GB',
-        'Referer': 'https://www.fotmob.com/',
-        'Origin': 'https://www.fotmob.com',
-    }
 
-    # Step 1: get EPL scoreboard to find upcoming event IDs
+    # Step 1: scoreboard for May 4 (Chelsea vs Forest) — use dates param
     event_id = None
     try:
-        r = _httpx.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard',
-                       headers=espn_headers, timeout=8)
+        r = _httpx.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260504',
+                       headers=H, timeout=8)
         body = r.json() if r.status_code == 200 else {}
         events = body.get('events', [])
-        if events:
+        # Find Chelsea match
+        for e in events:
+            name = e.get('name', '')
+            if 'Chelsea' in name or 'Nottingham' in name:
+                event_id = e.get('id')
+                break
+        if not event_id and events:
             event_id = events[0].get('id')
-        results['espn_scoreboard'] = {
+        results['scoreboard_may4'] = {
             'status': r.status_code,
             'event_count': len(events),
-            'first_event_id': event_id,
-            'first_event_name': events[0].get('name') if events else None,
+            'event_names': [e.get('name') for e in events],
+            'chelsea_event_id': event_id,
         }
     except Exception as exc:
-        results['espn_scoreboard'] = {'error': str(exc)}
+        results['scoreboard_may4'] = {'error': str(exc)}
 
-    # Step 2: ESPN event summary — contains injuries per team
+    # Step 2: event summary — drill into rosters[0].athletes[:2] and pickcenter
     if event_id:
         try:
             r2 = _httpx.get(
                 f'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event={event_id}',
-                headers=espn_headers, timeout=8)
+                headers=H, timeout=10)
             body2 = r2.json() if r2.status_code == 200 else {}
-            # injuries lives under injuries.home / injuries.away OR in boxscoreSource
-            injuries_raw = body2.get('injuries', {})
-            participants = body2.get('boxscore', {}).get('teams', [])
-            results['espn_event_summary'] = {
+
+            # Rosters — look for injury indicators on athletes
+            rosters = body2.get('rosters', [])
+            roster_sample = []
+            for team_roster in rosters[:2]:
+                team_name = team_roster.get('team', {}).get('displayName', '?')
+                athletes = team_roster.get('athletes', [])
+                injured = []
+                for a in athletes:
+                    ath = a.get('athlete', {})
+                    injs = ath.get('injuries', [])
+                    status = a.get('suiteStatus', a.get('status', {}).get('type', {}).get('description', ''))
+                    active = a.get('active', True)
+                    if injs or not active or 'injur' in str(status).lower() or 'out' in str(status).lower():
+                        injured.append({
+                            'name': ath.get('displayName'),
+                            'active': active,
+                            'status': status,
+                            'injuries': injs[:1],
+                        })
+                roster_sample.append({'team': team_name, 'total_athletes': len(athletes), 'injured_sample': injured[:5]})
+
+            # Pickcenter / odds
+            pickcenter = body2.get('pickcenter', [])
+            odds_raw = body2.get('odds', [])
+
+            results['event_summary'] = {
                 'status': r2.status_code,
-                'has_injuries_key': 'injuries' in body2,
-                'injuries_sample': str(injuries_raw)[:300],
-                'top_level_keys': list(body2.keys())[:15],
-                'team_count_in_boxscore': len(participants),
+                'event_id': event_id,
+                'top_keys': list(body2.keys()),
+                'roster_teams': len(rosters),
+                'roster_sample': roster_sample,
+                'pickcenter_count': len(pickcenter),
+                'pickcenter_sample': pickcenter[:3] if pickcenter else [],
+                'odds_count': len(odds_raw),
+                'odds_sample': str(odds_raw)[:400],
             }
         except Exception as exc:
-            results['espn_event_summary'] = {'error': str(exc)}
+            results['event_summary'] = {'error': str(exc)}
+    else:
+        results['event_summary'] = {'skipped': 'no event_id found for May 4'}
 
-    # Step 3: ESPN team-level injuries for Chelsea (id varies — find via teams endpoint)
+    # Step 3: also test scoreboard for current round without date filter
     try:
-        rt = _httpx.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams',
-                        headers=espn_headers, timeout=8)
-        body_t = rt.json() if rt.status_code == 200 else {}
-        sports = body_t.get('sports', [{}])
-        leagues = sports[0].get('leagues', [{}]) if sports else [{}]
-        teams_list = leagues[0].get('teams', []) if leagues else []
-        chelsea = next((t['team'] for t in teams_list
-                        if 'Chelsea' in t.get('team', {}).get('displayName', '')), None)
-        chelsea_id = chelsea.get('id') if chelsea else None
-        results['espn_teams'] = {
-            'status': rt.status_code,
-            'team_count': len(teams_list),
-            'chelsea_id': chelsea_id,
+        rc = _httpx.get('https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard',
+                        headers=H, timeout=8)
+        bodyc = rc.json() if rc.status_code == 200 else {}
+        eventsc = bodyc.get('events', [])
+        results['scoreboard_now'] = {
+            'status': rc.status_code,
+            'event_count': len(eventsc),
+            'names': [e.get('name') for e in eventsc],
         }
-        if chelsea_id:
-            ri = _httpx.get(
-                f'https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/{chelsea_id}/injuries',
-                headers=espn_headers, timeout=8)
-            body_i = ri.json() if ri.status_code == 200 else {}
-            results['espn_chelsea_injuries'] = {
-                'status': ri.status_code,
-                'keys': list(body_i.keys())[:10],
-                'sample': str(body_i)[:400],
-            }
     except Exception as exc:
-        results['espn_teams'] = {'error': str(exc)}
+        results['scoreboard_now'] = {'error': str(exc)}
 
     # Step 4: FotMob matches with proper app headers
     for fotmob_url, label in [
