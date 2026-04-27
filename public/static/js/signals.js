@@ -273,7 +273,7 @@ function loadInjurySection(injDiv) {
     const html = fmt(home, homeInj) + fmt(away, awayInj);
     injDiv.innerHTML = html
       ? `<div class="inj-label">Absences</div>${html}`
-      : '<div class="inj-row" style="color:var(--text-3)">No confirmed absences</div>';
+      : '<div class="inj-row" style="color:var(--text-3);font-style:italic">Injury data unavailable</div>';
   });
 }
 
