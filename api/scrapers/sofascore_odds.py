@@ -10,9 +10,21 @@ Caller: api/scrapers/fixtures.py (fetch_upcoming_fixtures)
 from typing import Dict, List, Optional
 import httpx
 
+# More complete browser headers — required by the odds endpoint from cloud IPs
 _HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    'User-Agent': (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36'
+    ),
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-GB,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Origin': 'https://www.sofascore.com',
     'Referer': 'https://www.sofascore.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-site',
 }
 
 # EPL 2025-26 on Sofascore
@@ -52,20 +64,24 @@ def fetch_sofascore_odds_for_rounds(rounds: List[int]) -> Dict[str, Dict[str, fl
     for all fixtures in the given round numbers.
 
     Makes 1 round-list call + 1 odds call per fixture.
-    Returns {} silently on any failure.
+    Returns {} on any failure; logs errors to stdout (visible in Vercel logs).
     """
     results: Dict[str, Dict[str, float]] = {}
 
     for round_num in rounds:
         try:
-            r = httpx.get(
+            url = (
                 f'https://api.sofascore.com/api/v1/unique-tournament/'
-                f'{_TOURNAMENT_ID}/season/{_SEASON_ID}/events/round/{round_num}',
-                headers=_HEADERS, timeout=10,
+                f'{_TOURNAMENT_ID}/season/{_SEASON_ID}/events/round/{round_num}'
             )
-            r.raise_for_status()
+            r = httpx.get(url, headers=_HEADERS, timeout=10)
+            if r.status_code != 200:
+                print(f'[sofascore_odds] round {round_num} → {r.status_code}')
+                continue
             events = r.json().get('events', [])
-        except Exception:
+            print(f'[sofascore_odds] round {round_num} → {len(events)} events')
+        except Exception as exc:
+            print(f'[sofascore_odds] round {round_num} fetch error: {exc}')
             continue
 
         for event in events:
@@ -76,11 +92,10 @@ def fetch_sofascore_odds_for_rounds(rounds: List[int]) -> Dict[str, Dict[str, fl
                 continue
 
             try:
-                r2 = httpx.get(
-                    f'https://api.sofascore.com/api/v1/event/{eid}/odds/1/all',
-                    headers=_HEADERS, timeout=8,
-                )
+                odds_url = f'https://api.sofascore.com/api/v1/event/{eid}/odds/1/all'
+                r2 = httpx.get(odds_url, headers=_HEADERS, timeout=10)
                 if r2.status_code != 200:
+                    print(f'[sofascore_odds] {home} vs {away} odds → {r2.status_code}')
                     continue
                 markets = r2.json().get('markets', [])
                 ft = next(
@@ -88,6 +103,7 @@ def fetch_sofascore_odds_for_rounds(rounds: List[int]) -> Dict[str, Dict[str, fl
                     None,
                 )
                 if not ft:
+                    print(f'[sofascore_odds] {home} vs {away}: no Full time market')
                     continue
                 choices = {
                     c['name']: _frac_to_dec(c.get('fractionalValue', ''))
@@ -98,7 +114,10 @@ def fetch_sofascore_odds_for_rounds(rounds: List[int]) -> Dict[str, Dict[str, fl
                 if hw and aw:
                     key = f'{home} vs {away}'
                     results[key] = {'b365_hw': hw, 'b365_aw': aw}
-            except Exception:
+                    print(f'[sofascore_odds] {key}: hw={hw} aw={aw}')
+            except Exception as exc:
+                print(f'[sofascore_odds] {home} vs {away} odds error: {exc}')
                 continue
 
+    print(f'[sofascore_odds] total enriched: {len(results)}')
     return results
