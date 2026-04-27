@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -50,6 +51,29 @@ app = FastAPI(title='POISSON-EDGE', version='4.1', lifespan=lifespan)
 @app.get('/health')
 def health():
     return {'status': 'ok', 'data_ready': store.ready}
+
+
+@app.get('/api/debug', response_class=PlainTextResponse)
+def debug_signals() -> str:
+    """Plain-text signal summary — one line per signal, human-readable."""
+    sigs = get_signals()  # reuse existing logic
+    if not sigs:
+        return 'No signals computed.\n'
+    lines = [
+        f"{'MATCH':<35} {'MKT':<4} {'TIER':<5} {'EV':>7} {'P':>7} {'λH':>6} {'λA':>6}  DATE",
+        '-' * 85,
+    ]
+    for s in sigs:
+        match = f"{s['home']} vs {s['away']}"
+        lines.append(
+            f"{match:<35} {s['market']:<4} {s['tier']:<5}"
+            f" {s['ev_pct']:>+7.1f}%"
+            f" {s['model_p']*100:>6.1f}%"
+            f" {s['lambda_home']:>6.3f}"
+            f" {s['lambda_away']:>6.3f}"
+            f"  {s.get('date','?')}"
+        )
+    return '\n'.join(lines) + '\n'
 
 
 @app.get('/api/debug-odds')
