@@ -137,9 +137,10 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     if cached is not None:
         return cached
 
+    # regions=eu,uk: eu covers Pinnacle, uk covers Bet365
     base = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
             f'?apiKey={api_key}&bookmakers=pinnacle,bet365'
-            f'&oddsFormat=decimal&regions=eu')
+            f'&oddsFormat=decimal&regions=eu,uk')
 
     # --- h2h ---
     try:
