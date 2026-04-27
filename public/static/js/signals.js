@@ -38,10 +38,11 @@ function parseGates(sig) {
   const gb = sig.gate_block || '';
   const hasHardBlock = gb.includes('HARD-BLOCK');
   const hasSoftWarn  = gb.length > 0 && !hasHardBlock;
+  const modelP       = (sig.model_p || 0) * 100;
 
   return {
-    ev:   sig.ev_pct >= 4  ? 'pass' : sig.ev_pct >= 0 ? 'warn' : 'fail',
-    prob: hasHardBlock      ? 'fail' : 'pass',
+    ev:   sig.ev_pct >= 15 ? 'pass' : sig.ev_pct >= 4  ? 'warn' : 'fail',
+    prob: hasHardBlock      ? 'fail' : modelP >= 65     ? 'pass' : modelP >= 50 ? 'warn' : 'fail',
     odds: hasSoftWarn       ? 'warn' : 'pass',
     conf: 'pass',
   };
@@ -282,10 +283,19 @@ function renderBoard(signals, bankroll) {
     if (elevSection) elevSection.style.display = 'none';
   } else {
     if (elevSection) elevSection.style.display = '';
-    if (elevTitle)   elevTitle.textContent = isPromoted ? 'Best Bets' : 'Elevated Signals';
+    if (elevTitle)   elevTitle.textContent = isPromoted ? 'TOP SIGNALS (Backtest only)' : 'Elevated Signals';
     if (elevCount)   elevCount.textContent = isPromoted
       ? `${stripSignals.length} signal${stripSignals.length !== 1 ? 's' : ''} · Top EV`
       : `${stripSignals.length} signal${stripSignals.length !== 1 ? 's' : ''} · EV≥15%`;
+    const elevSubtitle = document.getElementById('elev-subtitle');
+    if (elevSubtitle) {
+      if (isPromoted) {
+        elevSubtitle.textContent = 'No elevated signals this GW — these are tracking entries only, not real money recommendations.';
+        elevSubtitle.style.display = '';
+      } else {
+        elevSubtitle.style.display = 'none';
+      }
+    }
     if (elevRow) {
       elevRow.innerHTML = stripSignals.map(s => {
         const gi = sorted.indexOf(s);

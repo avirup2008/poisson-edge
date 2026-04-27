@@ -194,6 +194,14 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
   font-weight: 600;
 }
 
+.elev-subtitle {
+  font-size: 11px;
+  color: var(--text-2);
+  font-style: italic;
+  margin: -6px 0 10px;
+  line-height: 1.4;
+}
+
 .elev-cards-row {
   display: flex;
   gap: 16px;
