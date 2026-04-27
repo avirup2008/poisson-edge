@@ -4,6 +4,7 @@
 
 let _signals = [];      // full result array from /api/signals
 let _bankroll = 1000;   // loaded from /api/bankroll
+let _currentModalSig = null;
 
 // ── Utilities ──────────────────────────────────────────────────
 
@@ -323,32 +324,92 @@ function openLogBetModal(idxStr) {
   const sig = _signals[parseInt(idxStr, 10)];
   if (!sig) return;
 
+  // Store for submit handler
+  _currentModalSig = sig;
+
   const modal = document.getElementById('log-bet-modal');
   if (!modal) return;
   modal.style.display = 'flex';
 
-  const set = (id, val) => {
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+  const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el) el.value = val;
   };
 
-  set('lb-home',       sig.home);
-  set('lb-away',       sig.away);
-  set('lb-market',     marketLabel(sig.market));
-  set('lb-date',       sig.date || '');
-  set('lb-tier',       sig.tier);
-  set('lb-model-ev',   sig.ev_pct.toFixed(4));
-  set('lb-model-p',    sig.model_p.toFixed(4));
-  set('lb-model-odds', (1 / sig.model_p).toFixed(2));
-  set('lb-actual-odds', sig.odds);
-  set('lb-stake',       (sig.kelly_stake || 0).toFixed(2));
+  setText('lbm-match',      `${sig.home} vs ${sig.away}`);
+  setText('lbm-market',     `${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}`);
+  setText('lbm-model-odds', (sig.model_p > 0 ? 1 / sig.model_p : 0).toFixed(2));
+  setText('lbm-ev',         `+${sig.ev_pct.toFixed(1)}%`);
+  setVal('lbm-actual-odds', sig.odds);
+  setVal('lbm-stake',       (sig.kelly_stake || 0).toFixed(2));
+
+  const errEl = document.getElementById('lbm-error');
+  if (errEl) errEl.textContent = '';
 }
 
 function closeLogBetModal() {
   const modal = document.getElementById('log-bet-modal');
   if (modal) modal.style.display = 'none';
+  _currentModalSig = null;
 }
 
 // ── Bootstrap ───────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', loadSignals);
+document.addEventListener('DOMContentLoaded', () => {
+  loadSignals();
+
+  // Modal close
+  const closeBtn = document.getElementById('lbm-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeLogBetModal);
+
+  // Modal submit
+  const submitBtn = document.getElementById('lbm-submit');
+  if (submitBtn) submitBtn.addEventListener('click', async () => {
+    const sig = _currentModalSig;
+    if (!sig) return;
+
+    const errEl = document.getElementById('lbm-error');
+    const actualOddsEl = document.getElementById('lbm-actual-odds');
+    const stakeEl      = document.getElementById('lbm-stake');
+
+    const actualOdds = parseFloat(actualOddsEl?.value);
+    const stake      = parseFloat(stakeEl?.value);
+
+    if (!actualOdds || actualOdds < 1.01) {
+      if (errEl) errEl.textContent = 'Enter valid actual odds (≥ 1.01)';
+      return;
+    }
+    if (!stake || stake <= 0) {
+      if (errEl) errEl.textContent = 'Enter a valid stake (> 0)';
+      return;
+    }
+
+    try {
+      await API.logBet({
+        home:        sig.home,
+        away:        sig.away,
+        market:      marketLabel(sig.market),
+        date:        sig.date || '',
+        tier:        sig.tier,
+        model_ev:    sig.ev_pct,
+        model_p:     sig.model_p,
+        model_odds:  sig.model_p > 0 ? 1 / sig.model_p : 0,
+        actual_odds: actualOdds,
+        stake,
+      });
+      closeLogBetModal();
+    } catch (err) {
+      if (errEl) errEl.textContent = `Error: ${err.message}`;
+    }
+  });
+
+  // Close on backdrop click
+  const modal = document.getElementById('log-bet-modal');
+  if (modal) modal.addEventListener('click', e => {
+    if (e.target === modal) closeLogBetModal();
+  });
+});
