@@ -3,6 +3,7 @@ Signal engine: orchestrates model functions → produces SignalResult objects.
 No scraping, no HTTP, no data loading here.
 """
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -14,6 +15,36 @@ from model.poisson_edge_model import (
 )
 
 MARKET_KEYS = ('o25', 'u25', 'btts', 'hw', 'aw', 'o35')
+
+# Lambda thresholds — values outside these bounds are flagged SUSPECT.
+# Genuine PL lambdas stay in [0.60, 3.50].
+LAMBDA_MIN = 0.60
+LAMBDA_MAX = 3.50
+
+
+def _current_gw_fixtures(fixtures: List[Dict]) -> List[Dict]:
+    """
+    Filter to the current/next gameweek only.
+
+    Strategy: find the earliest fixture date that is today or future; include
+    all fixtures within 7 days of that anchor. This isolates a single GW window
+    and excludes the following GW. If all fixtures are in the past, return the
+    latest day's fixtures (graceful degradation).
+    """
+    today = date.today().isoformat()
+    future = [f for f in fixtures if f.get('date', '') >= today]
+
+    if not future:
+        # All past — return most recent GW
+        dates = sorted({f.get('date', '') for f in fixtures if f.get('date')}, reverse=True)
+        if not dates:
+            return fixtures
+        anchor = dates[0]
+    else:
+        anchor = min(f.get('date', '') for f in future)
+
+    cutoff = (date.fromisoformat(anchor) + timedelta(days=7)).isoformat()
+    return [f for f in fixtures if anchor <= f.get('date', '') <= cutoff]
 
 
 @dataclass
@@ -43,7 +74,7 @@ class GWSignals:
 
     def compute(self) -> List['SignalResult']:
         results = []
-        for fix in self.fixtures:
+        for fix in _current_gw_fixtures(self.fixtures):
             for market, odds in fix.get('markets', {}).items():
                 r = compute_signal(
                     home=fix['home'], away=fix['away'],
@@ -99,6 +130,11 @@ def compute_signal(
 
     if gate_block and 'HARD-BLOCK' in gate_block:
         tier = 'NO'
+
+    # Lambda sanity check — flag values outside credible PL range
+    if lh < LAMBDA_MIN or lh > LAMBDA_MAX or la < LAMBDA_MIN or la > LAMBDA_MAX:
+        suspect_note = f'SUSPECT: λH={lh:.3f} λA={la:.3f} outside [{LAMBDA_MIN},{LAMBDA_MAX}]'
+        gate_block = f'{gate_block} | {suspect_note}' if gate_block else suspect_note
 
     stake = kelly_stake(model_p, odds, bankroll) if tier != 'NO' else 0.0
 

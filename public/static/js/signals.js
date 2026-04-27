@@ -124,11 +124,8 @@ function renderElevCard(sig, globalIdx) {
   return `
     <div class="elev-card">
       <div class="ec-header">
-        <div>
-          <div class="ec-match">${sig.home} vs ${sig.away}</div>
-          <div class="ec-meta">${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}</div>
-        </div>
-        <div class="ec-kickoff">${kickoff}</div>
+        <div class="ec-match">${sig.home} vs ${sig.away}</div>
+        <div class="ec-meta">${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}${kickoff ? ' · ' + kickoff : ''}</div>
       </div>
 
       <div class="ec-ev-row">
@@ -218,6 +215,19 @@ function renderFeedRow(sig, globalIdx) {
 
 // ── Statusbar ───────────────────────────────────────────────────
 
+/**
+ * Derive EPL 2025-26 GW number from a YYYY-MM-DD date string.
+ * Ranges are inclusive; update when season extends beyond GW38.
+ */
+function gwFromDate(dateStr) {
+  if (!dateStr) return null;
+  if (dateStr <= '2026-05-04') return 35;
+  if (dateStr <= '2026-05-12') return 36;
+  if (dateStr <= '2026-05-19') return 37;
+  if (dateStr <= '2026-05-26') return 38;
+  return null;
+}
+
 function updateStatusbar(signals, bankroll) {
   const betSigs = signals.filter(s => s.tier === 'BET' || s.tier === 'ELEV');
   const avgEV   = betSigs.length
@@ -228,8 +238,14 @@ function updateStatusbar(signals, bankroll) {
     : '—';
   const totalK  = betSigs.reduce((s, r) => s + (r.kelly_stake || 0), 0).toFixed(2);
 
+  // Derive GW from the earliest fixture date in the current signal set
+  const minDate = signals.reduce((m, s) => s.date && s.date < m ? s.date : m, '9999-12-31');
+  const gw = gwFromDate(minDate !== '9999-12-31' ? minDate : null);
+  const gwLabel = gw ? `GW${gw}` : '—';
+
   const el = id => document.getElementById(id);
-  if (el('sb-gw'))            el('sb-gw').textContent = 'GW35';
+  if (el('sb-gw'))            el('sb-gw').textContent = gwLabel;
+  if (el('gw-meta'))          el('gw-meta').textContent = gwLabel;
   if (el('sb-fixture-count')) el('sb-fixture-count').textContent = signals.length;
   if (el('sb-avg-ev'))        el('sb-avg-ev').textContent  = avgEV !== '—' ? `+${avgEV}%` : '—';
   if (el('sb-avg-p'))         el('sb-avg-p').textContent   = avgP  !== '—' ? `${avgP}%`   : '—';

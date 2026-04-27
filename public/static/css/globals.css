@@ -253,31 +253,22 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
 
 .ec-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .ec-match {
   font-size: 14px;
   font-weight: 700;
   color: #e5e7eb;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 60%;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .ec-meta {
   font-size: 11px;
   color: var(--text-2);
-  margin-top: 2px;
-}
-
-.ec-kickoff {
-  font-size: 11px;
-  color: var(--text-2);
-  text-align: right;
-  white-space: nowrap;
+  margin-top: 0;
 }
 
 .ec-ev-row {
@@ -392,7 +383,6 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
 .ec-data-cell .dc-label {
   font-size: 9px;
   color: var(--text-2);
-  text-transform: uppercase;
   letter-spacing: .05em;
 }
 
