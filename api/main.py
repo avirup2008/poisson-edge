@@ -39,9 +39,10 @@ async def lifespan(app: FastAPI):
     """Download CSVs, compute ratings, then fetch live fixtures."""
     global _live_fixtures
     store.load()
-    api_key = os.getenv('ODDS_API_KEY', '')
+    api_key      = os.getenv('ODDS_API_KEY', '')
+    rapidapi_key = os.getenv('RAPIDAPI_KEY', '')
     if api_key:
-        _live_fixtures = fetch_upcoming_fixtures(api_key, store.historical)
+        _live_fixtures = fetch_upcoming_fixtures(api_key, store.historical, rapidapi_key)
     yield
 
 
@@ -290,10 +291,11 @@ def debug_betexplorer() -> Dict:
 def refresh_fixtures() -> Dict:
     """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""
     global _live_fixtures
-    api_key = os.getenv('ODDS_API_KEY', '')
+    api_key      = os.getenv('ODDS_API_KEY', '')
+    rapidapi_key = os.getenv('RAPIDAPI_KEY', '')
     if not api_key:
         raise HTTPException(400, 'ODDS_API_KEY not configured')
-    _live_fixtures = force_refresh(api_key, store.historical)
+    _live_fixtures = force_refresh(api_key, store.historical, rapidapi_key)
     return {'fixtures_loaded': len(_live_fixtures), 'source': 'oddsapi'}
 
 

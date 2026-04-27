@@ -8,7 +8,7 @@ import httpx
 
 from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match
 from api.scrapers.espn_odds import fetch_espn_dk_odds
-from api.scrapers.betexplorer import fetch_b365_epl
+from api.scrapers.apifootball import fetch_b365_apifootball
 
 _CACHE_FILE = Path('/tmp/poisson-edge-cache/fixtures_cache.json')
 _CACHE_TTL_HOURS = 6
@@ -129,11 +129,17 @@ def _save_cache(fixtures: List[Dict]) -> None:
         pass
 
 
-def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
+def fetch_upcoming_fixtures(api_key: str, df=None, rapidapi_key: str = '') -> List[Dict]:
     """
     Fetch upcoming EPL fixtures with Pinnacle odds (h2h + totals).
     Makes two separate requests to avoid comma-encoding issues with httpx.
     Returns cached result if < 6h old. Returns [] on error.
+
+    Args:
+        api_key:      OddsAPI key (Pinnacle odds).
+        df:           Historical results DataFrame for rest-day calculation.
+        rapidapi_key: RapidAPI key for API-Football Bet365 odds (optional).
+                      Free tier: 100 calls/day. Register at rapidapi.com.
     """
     cached = _load_cache()
     if cached is not None:
@@ -196,22 +202,24 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     fixtures.sort(key=lambda x: x['date'])
 
     # Enrich with Bet365 odds for Pinnacle comparison (user bets on Bet365).
-    # Primary: betexplorer.com scrape — real Bet365 1x2 decimal odds.
-    # Fallback: ESPN pickcenter (DraftKings) if betexplorer is blocked from Vercel.
+    # Primary:  API-Football via RapidAPI — real Bet365 1x2 odds (free: 100 calls/day).
+    #           Requires RAPIDAPI_KEY env var. Register free at rapidapi.com → API-Football.
+    # Fallback: ESPN pickcenter (DraftKings) if RAPIDAPI_KEY is not set.
     b365_enriched = 0
-    try:
-        b365_odds = fetch_b365_epl()
-        for fix in fixtures:
-            key = f"{fix['home']} vs {fix['away']}"
-            b365 = b365_odds.get(key)
-            if b365:
-                fix['b365'].update(b365)
-                b365_enriched += 1
-    except Exception as exc:
-        print(f'[fixtures] betexplorer error: {exc}')
+    if rapidapi_key:
+        try:
+            b365_odds = fetch_b365_apifootball(rapidapi_key)
+            for fix in fixtures:
+                key = f"{fix['home']} vs {fix['away']}"
+                b365 = b365_odds.get(key)
+                if b365:
+                    fix['b365'].update(b365)
+                    b365_enriched += 1
+        except Exception as exc:
+            print(f'[fixtures] apifootball error: {exc}')
 
     if b365_enriched == 0:
-        # betexplorer unavailable (likely blocked from Vercel IPs) — fall back to DK via ESPN
+        # No RAPIDAPI_KEY or API-Football failed — fall back to DraftKings via ESPN
         try:
             dk_odds = fetch_espn_dk_odds()
             for fix in fixtures:
@@ -226,7 +234,7 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     return fixtures
 
 
-def force_refresh(api_key: str, df=None) -> List[Dict]:
+def force_refresh(api_key: str, df=None, rapidapi_key: str = '') -> List[Dict]:
     """Bypass cache and re-fetch from OddsAPI."""
     _CACHE_FILE.unlink(missing_ok=True)
-    return fetch_upcoming_fixtures(api_key, df)
+    return fetch_upcoming_fixtures(api_key, df, rapidapi_key)
