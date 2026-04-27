@@ -675,3 +675,124 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
 }
 
 .btn-log-bet:hover { opacity: .85; }
+
+/* Lambda detail panel */
+.lambda-detail {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.ld-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 0;
+  user-select: none;
+}
+
+.ld-toggle:hover { color: var(--text-1); }
+
+.ld-chevron {
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.lambda-detail.ld-open .ld-chevron {
+  transform: rotate(90deg);
+}
+
+.ld-body {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.lambda-detail.ld-open .ld-body {
+  display: grid;
+}
+
+.ld-col { display: flex; flex-direction: column; gap: 4px; }
+
+.ld-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.ld-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ld-row span:last-child {
+  color: var(--text-1);
+  font-weight: 500;
+}
+
+/* Injury section */
+.inj-section {
+  margin-bottom: 8px;
+}
+
+.inj-row {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 2px;
+}
+
+.inj-team {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+/* Cat A Over 2.5 season tracker */
+.cata-tracker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 32px;
+  font-size: 11px;
+  background: rgba(201,168,76,0.06);
+  border-bottom: 1px solid var(--border);
+}
+
+.cata-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.cata-record {
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.cata-pct {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.cata-sep { color: var(--text-3); }
+
+.cata-remaining {
+  color: var(--text-2);
+  font-size: 11px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

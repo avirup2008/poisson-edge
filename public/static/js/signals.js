@@ -113,6 +113,45 @@ function renderDataCells(sig) {
     </div>`;
 }
 
+// ── Lambda detail panel ─────────────────────────────────────────
+
+function renderLambdaDetail(sig) {
+  const d = sig.lambda_detail;
+  if (!d || !d.lh) return '';
+
+  const hFatigue = d.home_fatigue != null ? d.home_fatigue : 1.0;
+  const aFatigue = d.away_fatigue != null ? d.away_fatigue : 1.0;
+  const hRest = d.home_rest_days != null ? d.home_rest_days : 7;
+  const aRest = d.away_rest_days != null ? d.away_rest_days : 7;
+  const hMult = d.home_atk_mult != null ? d.home_atk_mult : 1.0;
+  const aMult = d.away_atk_mult != null ? d.away_atk_mult : 1.0;
+
+  return `
+    <div class="lambda-detail">
+      <div class="ld-toggle" onclick="this.parentElement.classList.toggle('ld-open')">
+        <span>λ Model detail</span><span class="ld-chevron">›</span>
+      </div>
+      <div class="ld-body">
+        <div class="ld-col">
+          <div class="ld-title">λH = ${(d.lh || 0).toFixed(3)}</div>
+          <div class="ld-row"><span>Atk rating</span><span>${(d.home_atk || 0).toFixed(3)}</span></div>
+          <div class="ld-row"><span>Opp def rating</span><span>${(d.away_def || 0).toFixed(3)}</span></div>
+          <div class="ld-row"><span>λ half × home adv</span><span>${((d.lhalf || 1.36) * (d.home_adv || 1.06)).toFixed(3)}</span></div>
+          <div class="ld-row"><span>Injury mult</span><span>×${hMult.toFixed(2)}</span></div>
+          <div class="ld-row"><span>Fatigue (${hRest}d)</span><span>×${hFatigue.toFixed(3)}</span></div>
+        </div>
+        <div class="ld-col">
+          <div class="ld-title">λA = ${(d.la || 0).toFixed(3)}</div>
+          <div class="ld-row"><span>Atk rating</span><span>${(d.away_atk || 0).toFixed(3)}</span></div>
+          <div class="ld-row"><span>Opp def rating</span><span>${(d.home_def || 0).toFixed(3)}</span></div>
+          <div class="ld-row"><span>λ half</span><span>${(d.lhalf || 1.36).toFixed(3)}</span></div>
+          <div class="ld-row"><span>Injury mult</span><span>×${aMult.toFixed(2)}</span></div>
+          <div class="ld-row"><span>Fatigue (${aRest}d)</span><span>×${aFatigue.toFixed(3)}</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── ELEV Card ──────────────────────────────────────────────────
 
 function renderElevCard(sig, globalIdx, promoted = false) {
@@ -156,6 +195,7 @@ function renderElevCard(sig, globalIdx, promoted = false) {
           LOG BET
         </button>
       </div>
+      ${renderLambdaDetail(sig)}
     </div>`;
 }
 
@@ -166,6 +206,28 @@ function toggleRow(wrap) {
     if (el !== wrap) el.classList.remove('expanded');
   });
   wrap.classList.toggle('expanded');
+
+  // Lazy-load injuries when row opens
+  if (wrap.classList.contains('expanded')) {
+    const injDiv = wrap.querySelector('.inj-section');
+    if (injDiv && !injDiv.dataset.loaded) {
+      const home = injDiv.dataset.home;
+      const away = injDiv.dataset.away;
+      injDiv.dataset.loaded = '1';
+      Promise.all([
+        fetch(`/api/injuries/${encodeURIComponent(home)}`).then(r => r.json()).catch(() => []),
+        fetch(`/api/injuries/${encodeURIComponent(away)}`).then(r => r.json()).catch(() => []),
+      ]).then(([homeInj, awayInj]) => {
+        const fmt = (team, injs) => {
+          if (!injs || !injs.length) return '';
+          const names = injs.slice(0, 4).map(i => i.player || i.name || '?').join(', ');
+          return `<div class="inj-row"><span class="inj-team">${team}:</span> ${names}${injs.length > 4 ? ` +${injs.length - 4} more` : ''}</div>`;
+        };
+        const html = fmt(home, homeInj) + fmt(away, awayInj);
+        injDiv.innerHTML = html || '<div class="inj-row" style="color:var(--text-3)">No confirmed absences</div>';
+      });
+    }
+  }
 }
 
 function renderFeedRow(sig, globalIdx) {
@@ -215,7 +277,12 @@ function renderFeedRow(sig, globalIdx) {
         <div class="expand-inner">
           ${renderEdgeBar(impliedP, modelP)}
           ${renderDataCells(sig)}
+          <div class="inj-section" data-home="${sig.home}" data-away="${sig.away}">
+            <div style="font-size:10px;font-weight:600;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px">Absences</div>
+            <div style="color:var(--text-3);font-size:11px">Loading…</div>
+          </div>
           <div class="gate-chips">${renderGateChips(gates)}</div>
+          ${renderLambdaDetail(sig)}
           ${footerHtml}
         </div>
       </div>
