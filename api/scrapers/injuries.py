@@ -118,6 +118,12 @@ def fetch_injuries(team: str) -> List[Dict]:
 
         name = p.get('web_name') or f"{p.get('first_name','?')} {p.get('second_name','')}"
         news = p.get('news', '')
+
+        # Skip loan/transfer departures — FPL marks these 'u' with "joined" in news.
+        # They're not at the club so shouldn't appear as match absences.
+        news_lower = news.lower()
+        if status == 'u' and any(kw in news_lower for kw in ('joined', 'loan', 'transferred', 'released', 'signed')):
+            continue
         chance = p.get('chance_of_playing_next_round')
 
         # Build status label
