@@ -238,24 +238,32 @@ def debug_sources() -> Dict:
     except Exception as exc:
         results['scoreboard_now'] = {'error': str(exc)}
 
-    # Step 4: ESPN core API injuries for Chelsea (id=363)
+    # Step 4: Direct FPL bootstrap test (new injury source)
     try:
-        ri = _httpx.get(
-            'https://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/teams/363/injuries?limit=100',
-            headers=H, timeout=10)
-        body_i = ri.json() if ri.status_code == 200 else {}
-        items = body_i.get('items', [])
-        results['espn_core_injuries_chelsea'] = {
-            'status': ri.status_code,
-            'count': body_i.get('count', 0),
-            'items_returned': len(items),
-            'first_item': str(items[0])[:400] if items else None,
-            'top_keys': list(body_i.keys()),
+        rf = _httpx.get(
+            'https://fantasy.premierleague.com/api/bootstrap-static/',
+            headers=H, timeout=15)
+        body_f = rf.json() if rf.status_code == 200 else {}
+        teams_f = body_f.get('teams', [])
+        elements_f = body_f.get('elements', [])
+        # Find Chelsea team id
+        chelsea_fpl = next((t for t in teams_f if t.get('short_name') == 'CHE'), None)
+        chelsea_id_f = chelsea_fpl.get('id') if chelsea_fpl else None
+        injured_f = [p for p in elements_f
+                     if p.get('team') == chelsea_id_f and p.get('status') != 'a']
+        results['fpl_bootstrap'] = {
+            'status': rf.status_code,
+            'team_count': len(teams_f),
+            'player_count': len(elements_f),
+            'chelsea_fpl_id': chelsea_id_f,
+            'chelsea_injuries': len(injured_f),
+            'sample': [{'name': p['web_name'], 'status': p['status'], 'news': p['news'][:50]}
+                       for p in injured_f[:4]],
         }
     except Exception as exc:
-        results['espn_core_injuries_chelsea'] = {'error': str(exc)}
+        results['fpl_bootstrap'] = {'error': str(exc)}
 
-    # Step 5: Live test of the new fetch_injuries function
+    # Step 5: Live test of the fetch_injuries function
     try:
         from api.scrapers.injuries import fetch_injuries as _fi
         chelsea_inj = _fi('Chelsea')
@@ -264,7 +272,6 @@ def debug_sources() -> Dict:
             'chelsea_count': len(chelsea_inj),
             'chelsea_sample': chelsea_inj[:3],
             'forest_count': len(forest_inj),
-            'forest_sample': forest_inj[:3],
         }
     except Exception as exc:
         results['fetch_injuries_live'] = {'error': str(exc)}
