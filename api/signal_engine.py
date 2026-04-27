@@ -29,6 +29,7 @@ class SignalResult:
     lambda_home: float
     lambda_away: float
     gate_block: Optional[str] = None
+    date: Optional[str] = None
 
 
 @dataclass
@@ -58,6 +59,7 @@ class GWSignals:
                     home_def_boost=fix.get('home_def_boost', 1.0),
                     away_def_boost=fix.get('away_def_boost', 1.0),
                 )
+                r.date = fix.get('date', '')
                 results.append(r)
         results.sort(key=lambda r: r.ev_pct, reverse=True)
         return results

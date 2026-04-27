@@ -393,4 +393,5 @@ def _serialise(r: SignalResult) -> Dict[str, Any]:
         'tier': r.tier, 'kelly_stake': r.kelly_stake,
         'lambda_home': r.lambda_home, 'lambda_away': r.lambda_away,
         'gate_block': r.gate_block,
+        'date': r.date,
     }
