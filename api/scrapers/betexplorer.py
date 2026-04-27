@@ -1,6 +1,6 @@
 """
 Betexplorer Bet365 1x2 odds scraper for EPL fixtures.
-https://www.betexplorer.com/soccer/england/premier-league/
+https://www.betexplorer.com/football/england/premier-league/
 
 Used as fallback when OddsAPI plan does not include the bet365 bookmaker.
 One league-page request + one per-match request (max 8 fixtures).
@@ -12,7 +12,7 @@ import httpx
 from typing import Dict, List, Optional, Tuple
 
 _BASE = 'https://www.betexplorer.com'
-_LEAGUE_URL = f'{_BASE}/soccer/england/premier-league/'
+_LEAGUE_URL = f'{_BASE}/football/england/premier-league/'
 
 _HEADERS = {
     'User-Agent': (
@@ -160,9 +160,9 @@ def fetch_b365_epl() -> Dict[str, Dict[str, float]]:
         return {}
 
     # Step 2: extract match links
-    # URL pattern: /soccer/england/premier-league/chelsea-nott-m-forest/abc123/
+    # URL pattern: /football/england/premier-league/chelsea-nott-m-forest/abc123/
     links: List[str] = list(dict.fromkeys(re.findall(
-        r'href="(/soccer/england/premier-league/[^/"]+/[a-zA-Z0-9]+/)"',
+        r'href="(/football/england/premier-league/[^/"]+/[a-zA-Z0-9]+/)"',
         league_html,
     )))
     print(f'[betexplorer] found {len(links)} match links')
@@ -222,7 +222,7 @@ def debug_probe() -> Dict:
 
         if html:
             links = list(dict.fromkeys(re.findall(
-                r'href="(/soccer/england/premier-league/[^/"]+/[a-zA-Z0-9]+/)"',
+                r'href="(/football/england/premier-league/[^/"]+/[a-zA-Z0-9]+/)"',
                 html,
             )))
             out['match_links_found'] = len(links)
