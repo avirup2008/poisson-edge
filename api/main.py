@@ -279,6 +279,13 @@ def debug_sources() -> Dict:
     return results
 
 
+@app.get('/api/debug-betexplorer')
+def debug_betexplorer() -> Dict:
+    """Probe betexplorer.com from Vercel — checks reachability and Bet365 odds parsing."""
+    from api.scrapers.betexplorer import debug_probe
+    return debug_probe()
+
+
 @app.get('/api/refresh-fixtures')
 def refresh_fixtures() -> Dict:
     """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""

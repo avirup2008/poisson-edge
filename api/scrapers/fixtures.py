@@ -8,6 +8,7 @@ import httpx
 
 from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match
 from api.scrapers.espn_odds import fetch_espn_dk_odds
+from api.scrapers.betexplorer import fetch_b365_epl
 
 _CACHE_FILE = Path('/tmp/poisson-edge-cache/fixtures_cache.json')
 _CACHE_TTL_HOURS = 6
@@ -194,17 +195,32 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
 
     fixtures.sort(key=lambda x: x['date'])
 
-    # Enrich with DraftKings soft-book odds (via ESPN event summary) for Pinnacle comparison.
-    # ESPN pickcenter is accessible from Vercel; returns DraftKings American → decimal.
+    # Enrich with Bet365 odds for Pinnacle comparison (user bets on Bet365).
+    # Primary: betexplorer.com scrape — real Bet365 1x2 decimal odds.
+    # Fallback: ESPN pickcenter (DraftKings) if betexplorer is blocked from Vercel.
+    b365_enriched = 0
     try:
-        dk_odds = fetch_espn_dk_odds()
+        b365_odds = fetch_b365_epl()
         for fix in fixtures:
             key = f"{fix['home']} vs {fix['away']}"
-            dk = dk_odds.get(key)
-            if dk:
-                fix['b365'].update(dk)
-    except Exception:
-        pass  # ESPN unavailable — Pinnacle-only display degrades gracefully
+            b365 = b365_odds.get(key)
+            if b365:
+                fix['b365'].update(b365)
+                b365_enriched += 1
+    except Exception as exc:
+        print(f'[fixtures] betexplorer error: {exc}')
+
+    if b365_enriched == 0:
+        # betexplorer unavailable (likely blocked from Vercel IPs) — fall back to DK via ESPN
+        try:
+            dk_odds = fetch_espn_dk_odds()
+            for fix in fixtures:
+                key = f"{fix['home']} vs {fix['away']}"
+                dk = dk_odds.get(key)
+                if dk:
+                    fix['b365'].update(dk)
+        except Exception:
+            pass  # ESPN also unavailable — Pinnacle-only display degrades gracefully
 
     _save_cache(fixtures)
     return fixtures
