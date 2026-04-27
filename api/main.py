@@ -142,52 +142,66 @@ def debug_odds() -> Dict:
 
 @app.get('/api/debug-sofascore')
 def debug_sofascore() -> Dict:
-    """Diagnose Sofascore odds scraper — shows raw status codes and response snippets."""
+    """Diagnose Sofascore odds scraper — tests team events path (used by injuries) then odds endpoint."""
     import httpx as _httpx
-    from api.scrapers.sofascore_odds import _HEADERS, _TOURNAMENT_ID, _SEASON_ID, _frac_to_dec
+    from api.scrapers.sofascore_odds import _HEADERS, _TOURNAMENT_ID, _SEASON_ID
 
     results = {}
 
-    # Step 1: fetch round 36 fixtures list
+    # Step 1: team events endpoint (same path injuries uses — known to work)
+    # Chelsea = team ID 38
+    team_url = 'https://api.sofascore.com/api/v1/team/38/events/next/0'
+    first_eid = None
+    try:
+        r = _httpx.get(team_url, headers=_HEADERS, timeout=10)
+        body = r.json() if r.status_code == 200 else {}
+        events = body.get('events', [])
+        epl_events = [e for e in events
+                      if e.get('tournament', {}).get('uniqueTournament', {}).get('id') == 17]
+        first_eid = epl_events[0].get('id') if epl_events else None
+        results['team_events'] = {
+            'status': r.status_code,
+            'total_events': len(events),
+            'epl_events': len(epl_events),
+            'first_epl_event_id': first_eid,
+        }
+    except Exception as exc:
+        results['team_events'] = {'error': str(exc)}
+
+    # Step 2: unique-tournament round endpoint (was 403 before)
     round_url = (
         f'https://api.sofascore.com/api/v1/unique-tournament/'
         f'{_TOURNAMENT_ID}/season/{_SEASON_ID}/events/round/36'
     )
     try:
-        r = _httpx.get(round_url, headers=_HEADERS, timeout=10)
-        events = r.json().get('events', []) if r.status_code == 200 else []
-        first_eid = events[0].get('id') if events else None
-        results['round36'] = {
-            'status': r.status_code,
-            'event_count': len(events),
-            'first_event_id': first_eid,
-            'first_home': events[0].get('homeTeam', {}).get('name') if events else None,
-            'first_away': events[0].get('awayTeam', {}).get('name') if events else None,
+        r2 = _httpx.get(round_url, headers=_HEADERS, timeout=10)
+        results['round_endpoint'] = {
+            'status': r2.status_code,
+            'url': round_url,
         }
     except Exception as exc:
-        results['round36'] = {'error': str(exc)}
-        first_eid = None
+        results['round_endpoint'] = {'error': str(exc)}
 
-    # Step 2: fetch odds for that event
+    # Step 3: odds endpoint for the event ID we got from team path
     if first_eid:
         odds_url = f'https://api.sofascore.com/api/v1/event/{first_eid}/odds/1/all'
         try:
-            r2 = _httpx.get(odds_url, headers=_HEADERS, timeout=10)
-            body = r2.json() if r2.status_code == 200 else {}
-            markets = body.get('markets', [])
+            r3 = _httpx.get(odds_url, headers=_HEADERS, timeout=10)
+            body3 = r3.json() if r3.status_code == 200 else {}
+            markets = body3.get('markets', [])
             ft = next((m for m in markets if m.get('marketName') == 'Full time'), None)
-            results['odds'] = {
-                'status': r2.status_code,
+            results['odds_endpoint'] = {
+                'status': r3.status_code,
+                'event_id': first_eid,
                 'market_count': len(markets),
-                'market_names': [m.get('marketName') for m in markets[:5]],
+                'market_names': [m.get('marketName') for m in markets[:8]],
                 'full_time_found': ft is not None,
                 'choices': ft.get('choices', []) if ft else [],
-                'raw_snippet': str(body)[:500],
             }
         except Exception as exc:
-            results['odds'] = {'error': str(exc)}
+            results['odds_endpoint'] = {'error': str(exc)}
     else:
-        results['odds'] = {'skipped': 'no event_id from round fetch'}
+        results['odds_endpoint'] = {'skipped': 'no EPL event_id from team path'}
 
     return results
 
