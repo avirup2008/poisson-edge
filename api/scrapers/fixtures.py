@@ -8,7 +8,7 @@ import httpx
 
 from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match
 from api.scrapers.espn_odds import fetch_espn_dk_odds
-from api.scrapers.apifootball import fetch_b365_apifootball
+from api.scrapers.pulsescore import fetch_b365_pulsescore
 
 _CACHE_FILE = Path('/tmp/poisson-edge-cache/fixtures_cache.json')
 _CACHE_TTL_HOURS = 6
@@ -129,17 +129,23 @@ def _save_cache(fixtures: List[Dict]) -> None:
         pass
 
 
-def fetch_upcoming_fixtures(api_key: str, df=None, rapidapi_key: str = '') -> List[Dict]:
+def fetch_upcoming_fixtures(
+    api_key: str,
+    df=None,
+    rapidapi_key: str = '',
+    pulsescore_key: str = '',
+) -> List[Dict]:
     """
     Fetch upcoming EPL fixtures with Pinnacle odds (h2h + totals).
     Makes two separate requests to avoid comma-encoding issues with httpx.
     Returns cached result if < 6h old. Returns [] on error.
 
     Args:
-        api_key:      OddsAPI key (Pinnacle odds).
-        df:           Historical results DataFrame for rest-day calculation.
-        rapidapi_key: RapidAPI key for API-Football Bet365 odds (optional).
-                      Free tier: 100 calls/day. Register at rapidapi.com.
+        api_key:        OddsAPI key (Pinnacle odds).
+        df:             Historical results DataFrame for rest-day calculation.
+        rapidapi_key:   RapidAPI key for PulseScore/bet365data (optional).
+                        Free tier: 500 req/month. Subscribe at rapidapi.com/pulsescore/api/bet365data.
+        pulsescore_key: Direct PulseScore API key from pulsescore.net (optional, alternative to RapidAPI).
     """
     cached = _load_cache()
     if cached is not None:
@@ -201,14 +207,15 @@ def fetch_upcoming_fixtures(api_key: str, df=None, rapidapi_key: str = '') -> Li
 
     fixtures.sort(key=lambda x: x['date'])
 
-    # Enrich with Bet365 odds for Pinnacle comparison (user bets on Bet365).
-    # Primary:  API-Football via RapidAPI — real Bet365 1x2 odds (free: 100 calls/day).
-    #           Requires RAPIDAPI_KEY env var. Register free at rapidapi.com → API-Football.
-    # Fallback: ESPN pickcenter (DraftKings) if RAPIDAPI_KEY is not set.
+    # Enrich with real Bet365 1x2 odds via PulseScore (user bets on Bet365).
+    # Primary:  PulseScore — real Bet365 prematch odds, free 500 req/month.
+    #           RapidAPI: subscribe at rapidapi.com/pulsescore/api/bet365data → set RAPIDAPI_KEY.
+    #           Direct:   sign up at pulsescore.net → set PULSESCORE_KEY.
+    # Fallback: ESPN pickcenter (DraftKings) if neither key is set.
     b365_enriched = 0
-    if rapidapi_key:
+    if rapidapi_key or pulsescore_key:
         try:
-            b365_odds = fetch_b365_apifootball(rapidapi_key)
+            b365_odds = fetch_b365_pulsescore(rapidapi_key, pulsescore_key)
             for fix in fixtures:
                 key = f"{fix['home']} vs {fix['away']}"
                 b365 = b365_odds.get(key)
@@ -216,7 +223,7 @@ def fetch_upcoming_fixtures(api_key: str, df=None, rapidapi_key: str = '') -> Li
                     fix['b365'].update(b365)
                     b365_enriched += 1
         except Exception as exc:
-            print(f'[fixtures] apifootball error: {exc}')
+            print(f'[fixtures] pulsescore error: {exc}')
 
     if b365_enriched == 0:
         # No RAPIDAPI_KEY or API-Football failed — fall back to DraftKings via ESPN
@@ -234,7 +241,12 @@ def fetch_upcoming_fixtures(api_key: str, df=None, rapidapi_key: str = '') -> Li
     return fixtures
 
 
-def force_refresh(api_key: str, df=None, rapidapi_key: str = '') -> List[Dict]:
+def force_refresh(
+    api_key: str,
+    df=None,
+    rapidapi_key: str = '',
+    pulsescore_key: str = '',
+) -> List[Dict]:
     """Bypass cache and re-fetch from OddsAPI."""
     _CACHE_FILE.unlink(missing_ok=True)
-    return fetch_upcoming_fixtures(api_key, df, rapidapi_key)
+    return fetch_upcoming_fixtures(api_key, df, rapidapi_key, pulsescore_key)

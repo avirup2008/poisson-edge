@@ -39,10 +39,13 @@ async def lifespan(app: FastAPI):
     """Download CSVs, compute ratings, then fetch live fixtures."""
     global _live_fixtures
     store.load()
-    api_key      = os.getenv('ODDS_API_KEY', '')
-    rapidapi_key = os.getenv('RAPIDAPI_KEY', '')
+    api_key        = os.getenv('ODDS_API_KEY', '')
+    rapidapi_key   = os.getenv('RAPIDAPI_KEY', '')
+    pulsescore_key = os.getenv('PULSESCORE_KEY', '')
     if api_key:
-        _live_fixtures = fetch_upcoming_fixtures(api_key, store.historical, rapidapi_key)
+        _live_fixtures = fetch_upcoming_fixtures(
+            api_key, store.historical, rapidapi_key, pulsescore_key
+        )
     yield
 
 
@@ -287,15 +290,25 @@ def debug_betexplorer() -> Dict:
     return debug_probe()
 
 
+@app.get('/api/debug-pulsescore')
+def debug_pulsescore() -> Dict:
+    """Probe PulseScore/bet365data from Vercel — checks reachability and Bet365 odds parsing."""
+    from api.scrapers.pulsescore import debug_probe
+    rapidapi_key   = os.getenv('RAPIDAPI_KEY', '')
+    pulsescore_key = os.getenv('PULSESCORE_KEY', '')
+    return debug_probe(rapidapi_key, pulsescore_key)
+
+
 @app.get('/api/refresh-fixtures')
 def refresh_fixtures() -> Dict:
     """Force re-fetch of fixtures from OddsAPI (used by Vercel cron and manual refresh)."""
     global _live_fixtures
-    api_key      = os.getenv('ODDS_API_KEY', '')
-    rapidapi_key = os.getenv('RAPIDAPI_KEY', '')
+    api_key        = os.getenv('ODDS_API_KEY', '')
+    rapidapi_key   = os.getenv('RAPIDAPI_KEY', '')
+    pulsescore_key = os.getenv('PULSESCORE_KEY', '')
     if not api_key:
         raise HTTPException(400, 'ODDS_API_KEY not configured')
-    _live_fixtures = force_refresh(api_key, store.historical, rapidapi_key)
+    _live_fixtures = force_refresh(api_key, store.historical, rapidapi_key, pulsescore_key)
     return {'fixtures_loaded': len(_live_fixtures), 'source': 'oddsapi'}
 
 
