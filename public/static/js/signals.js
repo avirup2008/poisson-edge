@@ -132,6 +132,31 @@ function renderDataCells(sig) {
     </div>`;
 }
 
+// ── Pinnacle vs B365 comparison ────────────────────────────────
+
+function renderPinnacleVsB365(sig) {
+  if (!sig.b365_odds) return '';
+  const pin = sig.odds;
+  const b365 = sig.b365_odds;
+  const pips = Math.round((pin - b365) * 100);
+  // Negative pips = Pinnacle lower = sharp money agrees = green
+  const label  = pips <= -5 ? '✅ CONFIRMED'
+               : pips <=  5 ? '~ NEUTRAL'
+               : '⚠ FLAGGED';
+  const color  = pips <= -5 ? 'var(--green)'
+               : pips <=  5 ? 'var(--gold)'
+               : 'var(--red)';
+  const pipStr = (pips >= 0 ? '+' : '') + pips + ' pips';
+  return `
+    <div class="pin-b365">
+      <span class="pb-item">Pinnacle <strong>${pin}</strong></span>
+      <span class="pb-sep">·</span>
+      <span class="pb-item">B365 <strong>${b365}</strong></span>
+      <span class="pb-sep">·</span>
+      <span class="pb-pips" style="color:${color}">${pipStr} ${label}</span>
+    </div>`;
+}
+
 // ── Lambda detail panel ─────────────────────────────────────────
 
 function renderLambdaDetail(sig) {
@@ -205,6 +230,7 @@ function renderElevCard(sig, globalIdx, promoted = false) {
       </div>
 
       ${renderEdgeBar(impliedP, modelP)}
+      ${renderPinnacleVsB365(sig)}
       ${renderDataCells(sig)}
 
       <div class="gate-chips">${renderGateChips(gates)}</div>
@@ -296,6 +322,7 @@ function renderFeedRow(sig, globalIdx) {
       <div class="expand-panel">
         <div class="expand-inner">
           ${renderEdgeBar(impliedP, modelP)}
+          ${renderPinnacleVsB365(sig)}
           ${renderDataCells(sig)}
           <div class="inj-section" data-home="${sig.home}" data-away="${sig.away}">
             <div style="font-size:10px;font-weight:600;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px">Absences</div>

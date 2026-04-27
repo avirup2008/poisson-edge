@@ -88,11 +88,17 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
     if 'hw' not in odds:
         return None
 
+    # Separate Pinnacle markets from B365 reference odds.
+    # B365 must NOT go into 'markets' — compute_signal would crash on unknown keys.
+    pinnacle_markets = {k: v for k, v in odds.items() if not k.startswith('b365_')}
+    b365 = {k: v for k, v in odds.items() if k.startswith('b365_')}
+
     return {
         'home': home,
         'away': away,
         'date': date_str,
-        'markets': odds,
+        'markets': pinnacle_markets,
+        'b365': b365,                  # reference only — used for Pinnacle vs B365 display
         'home_rest_days': _days_since_last(home, df),
         'away_rest_days': _days_since_last(away, df),
     }

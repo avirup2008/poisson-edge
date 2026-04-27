@@ -286,6 +286,29 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
   line-height: 1;
 }
 
+/* Pinnacle vs B365 comparison row */
+.pin-b365 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 6px 0 2px;
+}
+
+.pb-item strong {
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.pb-sep { color: var(--text-3); }
+
+.pb-pips {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
 .ec-header {
   display: flex;
   flex-direction: column;

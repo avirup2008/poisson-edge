@@ -165,6 +165,7 @@ class SignalResult:
     date: Optional[str] = None
     structural_override: bool = False
     lambda_detail: dict = field(default_factory=dict)
+    b365_odds: Optional[float] = None   # Bet365 reference odds (hw/aw only)
 
 
 @dataclass
@@ -203,6 +204,13 @@ class GWSignals:
                     away_def_boost=fix.get('away_def_boost', 1.0),
                 )
                 r.date = fix_date
+
+                # B365 reference odds (hw/aw only — for Pinnacle vs B365 display)
+                b365 = fix.get('b365', {})
+                if market == 'hw':
+                    r.b365_odds = b365.get('b365_hw')
+                elif market == 'aw':
+                    r.b365_odds = b365.get('b365_aw')
 
                 # Append context note (Cat A/B, RELEG, H2H)
                 ctx = _context_note(home, away, self.historical, self.full_historical)

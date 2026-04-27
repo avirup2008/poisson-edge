@@ -422,4 +422,5 @@ def _serialise(r: SignalResult) -> Dict[str, Any]:
         'date': r.date,
         'structural_override': r.structural_override,
         'lambda_detail': r.lambda_detail,
+        'b365_odds': r.b365_odds,
     }
