@@ -12,6 +12,7 @@ from model.poisson_edge_model import (
     calculate_lambdas, build_score_matrix, extract_probabilities,
     apply_elo_ensemble, calculate_ev, classify_signal, kelly_stake,
     check_probability_gate, ELO_RATINGS,
+    classify_match_context,
 )
 
 MARKET_KEYS = ('o25', 'u25', 'btts', 'hw', 'aw', 'o35')
@@ -21,30 +22,86 @@ MARKET_KEYS = ('o25', 'u25', 'btts', 'hw', 'aw', 'o35')
 LAMBDA_MIN = 0.60
 LAMBDA_MAX = 3.50
 
+# EPL 2025-26 GW date calendar — update as season progresses
+_GW_CALENDAR = [
+    (35, '2026-04-28', '2026-05-05'),
+    (36, '2026-05-06', '2026-05-12'),
+    (37, '2026-05-13', '2026-05-19'),
+    (38, '2026-05-20', '2026-05-26'),
+]
+
+# EPL 2025-26 context — update as season standings change
+_TOP8_2526 = [
+    'Liverpool', 'Arsenal', 'Man City', 'Chelsea',
+    'Aston Villa', 'Tottenham', 'Newcastle', 'Man United',
+]
+_RELEGATION_ZONE_2526 = ['Sunderland', 'Burnley', 'Leeds']
+
 
 def _current_gw_fixtures(fixtures: List[Dict]) -> List[Dict]:
     """
-    Filter to the current/next gameweek only.
-
-    Strategy: find the earliest fixture date that is today or future; include
-    all fixtures within 7 days of that anchor. This isolates a single GW window
-    and excludes the following GW. If all fixtures are in the past, return the
-    latest day's fixtures (graceful degradation).
+    Filter to the current/next gameweek using the GW calendar.
+    Finds the first GW whose end date is >= today.
+    Falls back to a 7-day sliding window if we're past the calendar.
     """
     today = date.today().isoformat()
+    for _gw, start, end in _GW_CALENDAR:
+        if today <= end:
+            return [f for f in fixtures if start <= f.get('date', '') <= end]
+    # Beyond calendar — fall back to 7-day window from earliest future fixture
     future = [f for f in fixtures if f.get('date', '') >= today]
-
     if not future:
-        # All past — return most recent GW
-        dates = sorted({f.get('date', '') for f in fixtures if f.get('date')}, reverse=True)
-        if not dates:
-            return fixtures
-        anchor = dates[0]
-    else:
-        anchor = min(f.get('date', '') for f in future)
-
+        return fixtures
+    anchor = min(f.get('date', '') for f in future)
     cutoff = (date.fromisoformat(anchor) + timedelta(days=7)).isoformat()
     return [f for f in fixtures if anchor <= f.get('date', '') <= cutoff]
+
+
+def _context_note(home: str, away: str, historical: pd.DataFrame) -> Optional[str]:
+    """
+    Build a context note for gate_block:
+    - Cat A/B rivalry flag
+    - Relegation-zone team flag
+    - H2H last-5 record
+    """
+    notes: List[str] = []
+
+    # Cat A / Cat B
+    ctx = classify_match_context(home, away, _TOP8_2526)
+    if ctx == 'CatA':
+        notes.append('CAT-A rivalry')
+    elif ctx == 'CatB':
+        notes.append('CAT-B derby')
+
+    # Relegation zone
+    releg = [t for t in (home, away) if t in _RELEGATION_ZONE_2526]
+    if releg:
+        notes.append(f'RELEG-ZONE: {", ".join(releg)}')
+
+    # H2H last 5
+    if not historical.empty and 'HomeTeam' in historical.columns and 'FTR' in historical.columns:
+        mask = (
+            ((historical['HomeTeam'] == home) & (historical['AwayTeam'] == away)) |
+            ((historical['HomeTeam'] == away) & (historical['AwayTeam'] == home))
+        )
+        h2h = historical[mask].tail(5)
+        if not h2h.empty:
+            home_w = sum(
+                1 for _, row in h2h.iterrows()
+                if (row['HomeTeam'] == home and row['FTR'] == 'H') or
+                   (row['HomeTeam'] == away and row['FTR'] == 'A')
+            )
+            away_w = sum(
+                1 for _, row in h2h.iterrows()
+                if (row['HomeTeam'] == away and row['FTR'] == 'H') or
+                   (row['HomeTeam'] == home and row['FTR'] == 'A')
+            )
+            d_count = len(h2h) - home_w - away_w
+            notes.append(
+                f'H2H({len(h2h)}): {home[:5]} {home_w}W-{d_count}D-{away_w}W'
+            )
+
+    return ' | '.join(notes) if notes else None
 
 
 @dataclass
@@ -91,6 +148,9 @@ class GWSignals:
                     away_def_boost=fix.get('away_def_boost', 1.0),
                 )
                 r.date = fix.get('date')
+                ctx = _context_note(fix['home'], fix['away'], self.historical)
+                if ctx:
+                    r.gate_block = f'{r.gate_block} | {ctx}' if r.gate_block else ctx
                 results.append(r)
         results.sort(key=lambda r: r.ev_pct, reverse=True)
         return results

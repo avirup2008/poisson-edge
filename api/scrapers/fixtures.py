@@ -64,31 +64,21 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
     except (ValueError, AttributeError):
         return None
 
-    odds = {}
+    odds: Dict[str, float] = {}
     for bm in event.get('bookmakers', []):
         if bm.get('key') != 'pinnacle':
             continue
         for market in bm.get('markets', []):
             key = market.get('key')
-            outcomes = market.get('outcomes', [])
-            if key == 'totals':
-                o25 = next((o for o in outcomes if o['name'] == 'Over' and abs(o.get('point', 0) - 2.5) < 0.01), None)
-                u25 = next((o for o in outcomes if o['name'] == 'Under' and abs(o.get('point', 0) - 2.5) < 0.01), None)
-                o35 = next((o for o in outcomes if o['name'] == 'Over' and abs(o.get('point', 0) - 3.5) < 0.01), None)
-                if o25:
-                    odds['o25'] = o25['price']
-                if u25:
-                    odds['u25'] = u25['price']
-                if o35:
-                    odds['o35'] = o35['price']
-            elif key == 'h2h':
-                for o in outcomes:
-                    if _fuzzy_match(o['name'], raw_home):
-                        odds['hw'] = o['price']
-                    elif _fuzzy_match(o['name'], raw_away):
-                        odds['aw'] = o['price']
+            if key != 'h2h':
+                continue
+            for o in market.get('outcomes', []):
+                if _fuzzy_match(o['name'], raw_home):
+                    odds['hw'] = o['price']
+                elif _fuzzy_match(o['name'], raw_away):
+                    odds['aw'] = o['price']
 
-    if not any(k in odds for k in ('hw', 'o25')):
+    if 'hw' not in odds:
         return None
 
     return {
@@ -126,26 +116,67 @@ def _save_cache(fixtures: List[Dict]) -> None:
 
 def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
     """
-    Fetch all upcoming EPL fixtures with Pinnacle odds.
+    Fetch upcoming EPL fixtures with Pinnacle odds (h2h + totals).
+    Makes two separate requests to avoid comma-encoding issues with httpx.
     Returns cached result if < 6h old. Returns [] on error.
     """
     cached = _load_cache()
     if cached is not None:
         return cached
 
-    # OddsAPI requires raw commas — httpx URL-encodes them causing 422.
-    # btts market is not supported by this endpoint.
-    url = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-           f'?apiKey={api_key}&bookmakers=pinnacle&markets=h2h,totals'
-           f'&oddsFormat=decimal&regions=eu')
+    base = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
+            f'?apiKey={api_key}&bookmakers=pinnacle'
+            f'&oddsFormat=decimal&regions=eu')
+
+    # --- h2h ---
     try:
-        r = httpx.get(url, timeout=15)
+        r = httpx.get(base + '&markets=h2h', timeout=15)
         r.raise_for_status()
-        events = r.json()
+        h2h_events = r.json()
     except Exception:
         return []
 
-    fixtures = [f for e in events for f in [_parse_event(e, df)] if f]
+    # --- totals (separate call — no comma in markets param) ---
+    totals_by_id: Dict[str, Dict[str, float]] = {}
+    try:
+        rt = httpx.get(base + '&markets=totals', timeout=15)
+        rt.raise_for_status()
+        for e in rt.json():
+            eid = e.get('id')
+            if not eid:
+                continue
+            for bm in e.get('bookmakers', []):
+                if bm.get('key') != 'pinnacle':
+                    continue
+                for mkt in bm.get('markets', []):
+                    if mkt.get('key') != 'totals':
+                        continue
+                    for o in mkt.get('outcomes', []):
+                        name = o.get('name', '')
+                        point = o.get('point', 0) or 0
+                        price = o.get('price')
+                        if not price:
+                            continue
+                        if name == 'Over' and abs(point - 2.5) < 0.05:
+                            totals_by_id.setdefault(eid, {})['o25'] = price
+                        elif name == 'Under' and abs(point - 2.5) < 0.05:
+                            totals_by_id.setdefault(eid, {})['u25'] = price
+                        elif name == 'Over' and abs(point - 3.5) < 0.05:
+                            totals_by_id.setdefault(eid, {})['o35'] = price
+    except Exception:
+        pass  # totals unavailable — h2h signals still work
+
+    # Parse h2h events, merge in totals
+    fixtures = []
+    for e in h2h_events:
+        fix = _parse_event(e, df)
+        if fix is None:
+            continue
+        eid = e.get('id')
+        if eid and eid in totals_by_id:
+            fix['markets'].update(totals_by_id[eid])
+        fixtures.append(fix)
+
     fixtures.sort(key=lambda x: x['date'])
     _save_cache(fixtures)
     return fixtures

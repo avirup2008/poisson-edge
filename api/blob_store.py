@@ -144,7 +144,11 @@ def load_bankroll() -> dict:
     blob = get('bankroll/current.json')
     if blob:
         return blob
-    return {'starting_bankroll': 1000.0, 'current_bankroll': 1000.0, 'last_updated': None}
+    # Blob store empty — fall back to local committed file
+    local = _local_read('bankroll/current.json')
+    if local:
+        return local
+    return {'starting_bankroll': 53.17, 'current_bankroll': 53.17, 'last_updated': None}
 
 
 def save_bankroll(starting: float, current: float) -> bool:

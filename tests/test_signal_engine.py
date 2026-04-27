@@ -41,9 +41,10 @@ def test_compute_signal_kelly_zero_for_no_tier():
 
 def test_signal_result_has_date(monkeypatch):
     """SignalResult.date is propagated from the fixture dict."""
+    # Use a date within GW35 (Apr 28 – May 5) so the GW calendar filter passes it through.
     FIXTURES = [{
         "home": "Arsenal", "away": "Chelsea",
-        "date": "2026-05-10",
+        "date": "2026-04-29",
         "markets": {"o25": 1.90},
         "h2h": {"home": 2.10, "away": 3.50, "draw": 3.20},
         "totals": {},
@@ -63,12 +64,15 @@ def test_signal_result_has_date(monkeypatch):
     )
     results = gw.compute()
     assert len(results) > 0, "Expected at least one result"
-    assert all(r.date == "2026-05-10" for r in results), \
-        f"Expected date='2026-05-10' on all results, got: {[r.date for r in results]}"
+    assert all(r.date == "2026-04-29" for r in results), \
+        f"Expected date='2026-04-29' on all results, got: {[r.date for r in results]}"
 
 
-def test_signal_result_date_none_when_missing():
+def test_signal_result_date_none_when_missing(monkeypatch):
     """SignalResult.date is None when fixture has no date key."""
+    import api.signal_engine as se
+    # Bypass GW calendar filter so the dateless fixture passes through.
+    monkeypatch.setattr(se, '_current_gw_fixtures', lambda fixtures: fixtures)
     historical = pd.DataFrame({
         "HomeTeam": ["Arsenal"] * 20 + ["Chelsea"] * 20,
         "AwayTeam": ["Chelsea"] * 20 + ["Arsenal"] * 20,
