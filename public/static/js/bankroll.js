@@ -78,6 +78,53 @@ async function loadBankroll() {
     }
   }
   document.getElementById('sb-dd').textContent = maxDD > 0 ? `-€${maxDD.toFixed(2)}` : '—';
+
+  // CLV section
+  const clvBets = bets.filter(b => b.clv != null);
+  const clvEmpty = document.getElementById('clv-empty');
+  const clvSummary = document.getElementById('clv-summary');
+
+  if (clvBets.length === 0) {
+    if (clvEmpty) clvEmpty.style.display = '';
+    if (clvSummary) clvSummary.style.display = 'none';
+  } else {
+    if (clvEmpty) clvEmpty.style.display = 'none';
+    if (clvSummary) clvSummary.style.display = '';
+
+    // Average CLV (lower = better)
+    const avgClv = clvBets.reduce((s, b) => s + b.clv, 0) / clvBets.length;
+    const beatCount = clvBets.filter(b => b.clv < 1.0).length;
+    const clvColor = avgClv < 1.0 ? 'var(--green)' : 'var(--red)';
+
+    const el = id => document.getElementById(id);
+    if (el('clv-avg')) {
+      el('clv-avg').textContent = avgClv.toFixed(3);
+      el('clv-avg').style.color = clvColor;
+    }
+    if (el('clv-beat')) {
+      el('clv-beat').textContent = `${beatCount}/${clvBets.length}`;
+    }
+
+    // CLV table (newest first)
+    const clvTbody = document.getElementById('clv-tbody');
+    if (clvTbody) {
+      clvTbody.innerHTML = [...clvBets].reverse().map(b => {
+        const clvColor = b.clv < 1.0 ? 'var(--green)' : b.clv > 1.05 ? 'var(--red)' : 'var(--text-2)';
+        const rating = b.clv < 0.97 ? '✓ Strong' : b.clv < 1.0 ? '✓ Beat' : b.clv < 1.03 ? '~ Neutral' : '✗ Missed';
+        const ratingColor = b.clv < 1.0 ? 'var(--green)' : b.clv < 1.03 ? 'var(--text-2)' : 'var(--red)';
+        return `
+        <tr>
+          <td>
+            <div style="font-size:14px;font-weight:500">${b.home} vs ${b.away}</div>
+            <div style="font-size:11px;color:var(--text-2)">${marketLabel(b.market)} · ${b.date || ''}</div>
+          </td>
+          <td style="text-align:right;font-size:14px;font-weight:500">${(b.odds || 0).toFixed(2)}</td>
+          <td style="text-align:right;font-size:14px;font-weight:600;color:${clvColor}">${b.clv.toFixed(3)}</td>
+          <td style="text-align:right;font-size:12px;font-weight:600;color:${ratingColor}">${rating}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

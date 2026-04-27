@@ -56,6 +56,34 @@
         </thead>
         <tbody id="bets-tbody"><tr><td colspan="5" style="color:var(--text-2);padding:24px 0">No bets recorded yet.</td></tr></tbody>
       </table>
+
+      <div class="sdiv" style="margin-top:28px"><span class="sdiv-label">Closing Line Value</span><div class="sdiv-line"></div></div>
+      <div class="clv-summary" id="clv-summary" style="display:none">
+        <div class="kpi-strip" style="margin-bottom:16px">
+          <div class="kpi">
+            <div class="kpi-label">Avg CLV</div>
+            <div class="kpi-val" id="clv-avg">—</div>
+            <div class="kpi-sub">Target &lt; 1.00</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Beat closing</div>
+            <div class="kpi-val" id="clv-beat">—</div>
+            <div class="kpi-sub">of settled bets</div>
+          </div>
+        </div>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Match</th>
+              <th style="width:80px;text-align:right">Bet odds</th>
+              <th style="width:80px;text-align:right">CLV</th>
+              <th style="width:64px;text-align:right">Rating</th>
+            </tr>
+          </thead>
+          <tbody id="clv-tbody"></tbody>
+        </table>
+      </div>
+      <p id="clv-empty" style="color:var(--text-2);font-size:13px;margin-top:8px">No CLV data yet — CLV is recorded when bets are settled.</p>
     </div>
 
     <div class="statusbar">
