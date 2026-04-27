@@ -114,7 +114,7 @@ function renderDataCells(sig) {
 
 // ── ELEV Card ──────────────────────────────────────────────────
 
-function renderElevCard(sig, globalIdx) {
+function renderElevCard(sig, globalIdx, promoted = false) {
   const impliedP = (1 / sig.odds) * 100;
   const modelP   = sig.model_p * 100;
   const gates    = parseGates(sig);
@@ -122,7 +122,7 @@ function renderElevCard(sig, globalIdx) {
   const kickoff  = formatKickoff(sig.date);
 
   return `
-    <div class="elev-card">
+    <div class="elev-card${promoted ? ' promoted' : ''}">
       <div class="ec-header">
         <div class="ec-match">${sig.home} vs ${sig.away}</div>
         <div class="ec-meta">${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}${kickoff ? ' · ' + kickoff : ''}</div>
@@ -269,20 +269,27 @@ function renderBoard(signals, bankroll) {
   const betSignals  = sorted.filter(s => s.tier === 'BET');
   const restSignals = sorted.filter(s => s.tier === 'SIM' || s.tier === 'NO');
 
-  // ELEV strip
+  // ELEV strip — show ELEV cards if any; otherwise promote top 3 BET signals
   const elevSection = document.getElementById('elev-section');
   const elevRow     = document.getElementById('elev-cards-row');
   const elevCount   = document.getElementById('elev-count');
+  const elevTitle   = document.getElementById('elev-title');
 
-  if (elevSignals.length === 0) {
+  const stripSignals = elevSignals.length > 0 ? elevSignals : betSignals.slice(0, 3);
+  const isPromoted   = elevSignals.length === 0 && stripSignals.length > 0;
+
+  if (stripSignals.length === 0) {
     if (elevSection) elevSection.style.display = 'none';
   } else {
     if (elevSection) elevSection.style.display = '';
-    if (elevCount)   elevCount.textContent = `${elevSignals.length} signal${elevSignals.length !== 1 ? 's' : ''} · EV≥15%`;
+    if (elevTitle)   elevTitle.textContent = isPromoted ? 'Best Bets' : 'Elevated Signals';
+    if (elevCount)   elevCount.textContent = isPromoted
+      ? `${stripSignals.length} signal${stripSignals.length !== 1 ? 's' : ''} · Top EV`
+      : `${stripSignals.length} signal${stripSignals.length !== 1 ? 's' : ''} · EV≥15%`;
     if (elevRow) {
-      elevRow.innerHTML = elevSignals.map(s => {
+      elevRow.innerHTML = stripSignals.map(s => {
         const gi = sorted.indexOf(s);
-        return renderElevCard(s, gi);
+        return renderElevCard(s, gi, isPromoted);
       }).join('');
     }
   }

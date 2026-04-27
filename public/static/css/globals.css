@@ -251,6 +251,11 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
   min-width: 0;
 }
 
+/* Promoted BET cards shown in strip when no ELEV signals exist */
+.elev-card.promoted {
+  border-color: var(--blue);
+}
+
 .ec-header {
   display: flex;
   flex-direction: column;
