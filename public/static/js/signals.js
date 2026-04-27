@@ -10,10 +10,29 @@ let _currentModalSig = null;
 
 function marketLabel(m) {
   if (!m) return '';
-  if (m === 'h2h_home' || m === 'home') return 'Home Win';
-  if (m === 'h2h_away' || m === 'away') return 'Away Win';
-  if (m === 'h2h_draw' || m === 'draw') return 'Draw';
-  return m;
+  const MAP = {
+    hw: 'Home Win', aw: 'Away Win',
+    o25: 'Over 2.5', u25: 'Under 2.5',
+    o35: 'Over 3.5', btts: 'BTTS',
+    h2h_home: 'Home Win', h2h_away: 'Away Win', h2h_draw: 'Draw',
+  };
+  return MAP[m] || m;
+}
+
+/**
+ * Team-specific bet label. E.g. "Nott'm Forest Away Win" or "Over 2.5 Goals".
+ * Used in card headers so it's immediately clear who you're betting on.
+ */
+function betLabel(sig) {
+  const m = sig.market;
+  if (!m) return '';
+  if (m === 'hw') return `${sig.home} Home Win`;
+  if (m === 'aw') return `${sig.away} Away Win`;
+  if (m === 'o25') return 'Over 2.5 Goals';
+  if (m === 'u25') return 'Under 2.5 Goals';
+  if (m === 'o35') return 'Over 3.5 Goals';
+  if (m === 'btts') return 'Both Teams to Score';
+  return marketLabel(m);
 }
 
 /**
@@ -169,7 +188,8 @@ function renderElevCard(sig, globalIdx, promoted = false) {
     <div class="elev-card${promoted ? ' promoted' : ''}${sig.structural_override ? ' structural-override' : ''}">
       <div class="ec-header">
         <div class="ec-match">${sig.home} vs ${sig.away}</div>
-        <div class="ec-meta">${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}${kickoff ? ' · ' + kickoff : ''}</div>
+        <div class="ec-bet-label">${betLabel(sig)}</div>
+        <div class="ec-meta">Pinnacle @ ${sig.odds}${kickoff ? ' · ' + kickoff : ''}</div>
         ${soBadge}
       </div>
 
@@ -261,7 +281,7 @@ function renderFeedRow(sig, globalIdx) {
         </div>
         <div class="f-match">
           <div class="f-match-name">${sig.home} vs ${sig.away}</div>
-          <div class="f-match-sub">${marketLabel(sig.market)} · ${kickoff}</div>
+          <div class="f-match-sub">${betLabel(sig)} · ${kickoff}</div>
         </div>
         <div class="f-lambda">
           <div>λH <span>${(sig.lambda_home || 0).toFixed(2)}</span></div>

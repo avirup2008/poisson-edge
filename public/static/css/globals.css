@@ -300,6 +300,13 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
   line-height: 1.2;
 }
 
+.ec-bet-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-top: 1px;
+}
+
 .ec-meta {
   font-size: 11px;
   color: var(--text-2);
