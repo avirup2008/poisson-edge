@@ -349,6 +349,51 @@ def calculate_lambdas(
     return lh, la
 
 
+def calculate_lambda_components(
+    home: str,
+    away: str,
+    historical_data: pd.DataFrame,
+    g_atk: Dict,
+    g_def: Dict,
+    home_rest_days: int = 7,
+    away_rest_days: int = 7,
+    home_atk_mult: float = 1.0,
+    away_atk_mult: float = 1.0,
+    home_def_boost: float = 1.0,
+    away_def_boost: float = 1.0,
+    lhalf: float = LHALF,
+    home_adv: float = HOME_ADV,
+) -> dict:
+    """
+    Return the intermediate components that make up lambda_home and lambda_away.
+    Same computation as calculate_lambdas but exposes all multipliers.
+    """
+    ha_r, hd_r = get_team_ratings(home, historical_data, g_atk, g_def)
+    aa_r, ad_r = get_team_ratings(away, historical_data, g_atk, g_def)
+    hfat = fatigue_multiplier(home_rest_days)
+    afat = fatigue_multiplier(away_rest_days)
+    lh = ha_r * ad_r * lhalf * home_adv * home_atk_mult * away_def_boost * hfat
+    la = aa_r * hd_r * lhalf            * away_atk_mult * home_def_boost * afat
+    lh = max(0.3, min(6.0, lh))
+    la = max(0.3, min(6.0, la))
+    return {
+        'lh': round(lh, 4),
+        'la': round(la, 4),
+        'home_atk': round(ha_r, 4),
+        'home_def': round(hd_r, 4),
+        'away_atk': round(aa_r, 4),
+        'away_def': round(ad_r, 4),
+        'home_fatigue': round(hfat, 4),
+        'away_fatigue': round(afat, 4),
+        'home_rest_days': home_rest_days,
+        'away_rest_days': away_rest_days,
+        'home_atk_mult': round(home_atk_mult, 4),
+        'away_atk_mult': round(away_atk_mult, 4),
+        'lhalf': lhalf,
+        'home_adv': home_adv,
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SIGNAL CALCULATION
 # ══════════════════════════════════════════════════════════════════════════════

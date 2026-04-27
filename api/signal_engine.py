@@ -9,7 +9,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from model.poisson_edge_model import (
-    calculate_lambdas, build_score_matrix, extract_probabilities,
+    calculate_lambdas, calculate_lambda_components,
+    build_score_matrix, extract_probabilities,
     apply_elo_ensemble, calculate_ev, classify_signal, kelly_stake,
     check_probability_gate, ELO_RATINGS,
     classify_match_context,
@@ -163,6 +164,7 @@ class SignalResult:
     gate_block: Optional[str] = None
     date: Optional[str] = None
     structural_override: bool = False
+    lambda_detail: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -270,6 +272,12 @@ def compute_signal(
         home_atk_mult, away_atk_mult,
         home_def_boost, away_def_boost,
     )
+    detail = calculate_lambda_components(
+        home, away, historical, g_atk, g_def,
+        home_rest_days, away_rest_days,
+        home_atk_mult, away_atk_mult,
+        home_def_boost, away_def_boost,
+    )
     matrix = build_score_matrix(lh, la)
     probs = extract_probabilities(matrix)
 
@@ -298,4 +306,5 @@ def compute_signal(
         tier=tier, kelly_stake=stake,
         lambda_home=round(lh, 4), lambda_away=round(la, 4),
         gate_block=gate_block,
+        lambda_detail=detail,
     )

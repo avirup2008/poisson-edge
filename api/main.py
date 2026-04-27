@@ -320,6 +320,7 @@ def get_bankroll() -> Dict:
             'result': 'WIN' if status == 'won' else 'LOSS' if status == 'lost' else status.upper(),
             'result_score': b.get('result_score'),
             'pnl': pnl,
+            'clv': b.get('clv'),
             'date': b.get('date'),
             'logged_at': b.get('logged_at'),
         })
@@ -420,4 +421,5 @@ def _serialise(r: SignalResult) -> Dict[str, Any]:
         'gate_block': r.gate_block,
         'date': r.date,
         'structural_override': r.structural_override,
+        'lambda_detail': r.lambda_detail,
     }
