@@ -7,7 +7,7 @@ from typing import List, Dict, Optional
 import httpx
 
 from api.scrapers.odds import ODDS_API_BASE, EPL_KEY, _fuzzy_match
-from api.scrapers.sofascore_odds import fetch_sofascore_odds_for_rounds
+from api.scrapers.espn_odds import fetch_espn_dk_odds
 
 _CACHE_FILE = Path('/tmp/poisson-edge-cache/fixtures_cache.json')
 _CACHE_TTL_HOURS = 6
@@ -194,17 +194,17 @@ def fetch_upcoming_fixtures(api_key: str, df=None) -> List[Dict]:
 
     fixtures.sort(key=lambda x: x['date'])
 
-    # Enrich with Sofascore soft-book odds (provider 1 ≈ Bet365) for Pinnacle comparison.
-    # Fetch all remaining rounds in one pass; merge by 'Home vs Away' key.
+    # Enrich with DraftKings soft-book odds (via ESPN event summary) for Pinnacle comparison.
+    # ESPN pickcenter is accessible from Vercel; returns DraftKings American → decimal.
     try:
-        sf_odds = fetch_sofascore_odds_for_rounds([35, 36, 37, 38])
+        dk_odds = fetch_espn_dk_odds()
         for fix in fixtures:
             key = f"{fix['home']} vs {fix['away']}"
-            sf = sf_odds.get(key)
-            if sf:
-                fix['b365'].update(sf)
+            dk = dk_odds.get(key)
+            if dk:
+                fix['b365'].update(dk)
     except Exception:
-        pass  # Sofascore unavailable — Pinnacle-only display degrades gracefully
+        pass  # ESPN unavailable — Pinnacle-only display degrades gracefully
 
     _save_cache(fixtures)
     return fixtures

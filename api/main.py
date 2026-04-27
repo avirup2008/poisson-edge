@@ -238,16 +238,36 @@ def debug_sources() -> Dict:
     except Exception as exc:
         results['scoreboard_now'] = {'error': str(exc)}
 
-    # Step 4: FotMob matches with proper app headers
-    for fotmob_url, label in [
-        ('https://www.fotmob.com/api/matches?date=20260504', 'fotmob_matches'),
-        ('https://www.fotmob.com/api/leagues?id=47&ccode3=GBR_ENG&tab=matches', 'fotmob_leagues'),
-    ]:
-        try:
-            rf = _httpx.get(fotmob_url, headers=fotmob_headers, timeout=8, follow_redirects=True)
-            results[label] = {'status': rf.status_code, 'preview': rf.text[:300]}
-        except Exception as exc:
-            results[label] = {'error': str(exc)}
+    # Step 4: ESPN core API injuries for Chelsea (id=363)
+    try:
+        ri = _httpx.get(
+            'https://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/teams/363/injuries?limit=100',
+            headers=H, timeout=10)
+        body_i = ri.json() if ri.status_code == 200 else {}
+        items = body_i.get('items', [])
+        results['espn_core_injuries_chelsea'] = {
+            'status': ri.status_code,
+            'count': body_i.get('count', 0),
+            'items_returned': len(items),
+            'first_item': str(items[0])[:400] if items else None,
+            'top_keys': list(body_i.keys()),
+        }
+    except Exception as exc:
+        results['espn_core_injuries_chelsea'] = {'error': str(exc)}
+
+    # Step 5: Live test of the new fetch_injuries function
+    try:
+        from api.scrapers.injuries import fetch_injuries as _fi
+        chelsea_inj = _fi('Chelsea')
+        forest_inj = _fi("Nott'm Forest")
+        results['fetch_injuries_live'] = {
+            'chelsea_count': len(chelsea_inj),
+            'chelsea_sample': chelsea_inj[:3],
+            'forest_count': len(forest_inj),
+            'forest_sample': forest_inj[:3],
+        }
+    except Exception as exc:
+        results['fetch_injuries_live'] = {'error': str(exc)}
 
     return results
 

@@ -1,110 +1,151 @@
 """
-Injury scraper: Sofascore lineups API (missingPlayers).
-Returns list of {player, status, role, source} dicts.
+Injury scraper: ESPN core API for EPL team injury reports.
+
+Sofascore (previous source) returns 403 from Vercel cloud IPs.
+ESPN's site.api and sports.core.api are both accessible from Vercel.
+
+Pipeline:
+  1. Look up ESPN team ID via the teams list endpoint (cached per process)
+  2. Fetch injuries from sports.core.api.espn.com/v2/.../teams/{id}/injuries
+  3. Parse items into {player, status, role, source} dicts
+
+Returns [] on any failure — card degrades to "No injury data" rather
+than silently showing "No confirmed absences" (which is misleading).
 """
 from typing import List, Dict, Optional
 import httpx
 
-_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    'Referer': 'https://www.sofascore.com/',
+_H = {
+    'User-Agent': (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    ),
+    'Accept': 'application/json',
+}
+_LEAGUE = 'eng.1'
+
+# Internal name → ESPN display name (for fuzzy team lookup)
+_ESPN_NAME: Dict[str, str] = {
+    'Arsenal':          'Arsenal',
+    'Aston Villa':      'Aston Villa',
+    'Bournemouth':      'Bournemouth',
+    'Brentford':        'Brentford',
+    'Brighton':         'Brighton & Hove Albion',
+    'Chelsea':          'Chelsea',
+    'Crystal Palace':   'Crystal Palace',
+    'Everton':          'Everton',
+    'Fulham':           'Fulham',
+    'Ipswich':          'Ipswich Town',
+    'Leeds':            'Leeds United',
+    'Leicester':        'Leicester City',
+    'Liverpool':        'Liverpool',
+    'Man City':         'Manchester City',
+    'Man United':       'Manchester United',
+    'Newcastle':        'Newcastle United',
+    "Nott'm Forest":    'Nottingham Forest',
+    'Sunderland':       'Sunderland',
+    'Tottenham':        'Tottenham Hotspur',
+    'West Ham':         'West Ham United',
+    'Wolves':           'Wolverhampton Wanderers',
 }
 
-# Internal team name → Sofascore team ID (EPL 2025-26)
-_TEAM_ID: Dict[str, int] = {
-    'Arsenal':          42,
-    'Aston Villa':      40,
-    'Bournemouth':      60,
-    'Brentford':        50,
-    'Brighton':         30,
-    'Burnley':          6,
-    'Chelsea':          38,
-    'Crystal Palace':   7,
-    'Everton':          48,
-    'Fulham':           43,
-    'Leeds':            34,
-    'Liverpool':        44,
-    'Man City':         17,
-    'Man United':       35,
-    'Newcastle':        39,
-    "Nott'm Forest":    14,
-    'Sunderland':       41,
-    'Tottenham':        33,
-    'West Ham':         37,
-    'Wolves':           3,
-}
+# Module-level cache: ESPN display name → team ID
+_team_id_cache: Dict[str, int] = {}
 
-# Sofascore reason code → readable label (fallback if description absent)
-_REASON: Dict[int, str] = {
-    1: 'Injured',
-    2: 'Suspended',
-    3: 'Unknown',
-    4: 'Ill',
-    5: 'International duty',
-}
+
+def _load_team_ids() -> None:
+    """Populate _team_id_cache from ESPN teams endpoint (called once per process)."""
+    global _team_id_cache
+    if _team_id_cache:
+        return
+    try:
+        url = f'https://site.api.espn.com/apis/site/v2/sports/soccer/{_LEAGUE}/teams?limit=30'
+        r = httpx.get(url, headers=_H, timeout=10)
+        if r.status_code != 200:
+            return
+        sports = r.json().get('sports', [])
+        leagues = sports[0].get('leagues', []) if sports else []
+        teams = leagues[0].get('teams', []) if leagues else []
+        for t in teams:
+            team = t.get('team', {})
+            tid = team.get('id')
+            name = team.get('displayName', '')
+            if tid and name:
+                _team_id_cache[name] = int(tid)
+        print(f'[injuries] ESPN team IDs loaded: {len(_team_id_cache)} teams')
+    except Exception as exc:
+        print(f'[injuries] team ID load error: {exc}')
+
+
+def _espn_team_id(team: str) -> Optional[int]:
+    _load_team_ids()
+    espn_name = _ESPN_NAME.get(team, team)
+    # Exact match
+    if espn_name in _team_id_cache:
+        return _team_id_cache[espn_name]
+    # Partial match fallback
+    for k, v in _team_id_cache.items():
+        if team.lower() in k.lower() or k.lower() in team.lower():
+            return v
+    return None
 
 
 def fetch_injuries(team: str) -> List[Dict]:
     """
-    Fetch missing/injured players for a team's next EPL fixture via Sofascore.
-    Returns [] on any failure.
+    Fetch injured/suspended players for a team via ESPN core API.
+    Returns [] on any failure or if ESPN has no data for this team.
     """
-    team_id = _TEAM_ID.get(team)
+    team_id = _espn_team_id(team)
     if not team_id:
+        print(f'[injuries] no ESPN team ID for: {team}')
         return []
 
-    event_id, side = _next_event(team_id)
-    if not event_id:
-        return []
-
-    return _missing_players(event_id, side)
-
-
-def _next_event(team_id: int):
-    """Return (event_id, 'home'|'away') for team's next EPL fixture."""
+    url = (f'https://sports.core.api.espn.com/v2/sports/soccer/'
+           f'leagues/{_LEAGUE}/teams/{team_id}/injuries?limit=100')
     try:
-        url = f'https://api.sofascore.com/api/v1/team/{team_id}/events/next/0'
-        r = httpx.get(url, headers=_HEADERS, timeout=10)
-        r.raise_for_status()
-        for event in r.json().get('events', []):
-            # Filter to EPL (Sofascore unique tournament ID 17)
-            tid = (event.get('tournament', {})
-                   .get('uniqueTournament', {})
-                   .get('id'))
-            if tid != 17:
-                continue
-            home = event.get('homeTeam', {})
-            away = event.get('awayTeam', {})
-            eid = event.get('id')
-            if home.get('id') == team_id:
-                return eid, 'home'
-            elif away.get('id') == team_id:
-                return eid, 'away'
-    except Exception:
-        pass
-    return None, None
-
-
-def _missing_players(event_id: int, side: str) -> List[Dict]:
-    """Fetch lineup missingPlayers for given event + side."""
-    try:
-        url = f'https://api.sofascore.com/api/v1/event/{event_id}/lineups'
-        r = httpx.get(url, headers=_HEADERS, timeout=10)
-        r.raise_for_status()
+        r = httpx.get(url, headers=_H, timeout=10)
+        if r.status_code != 200:
+            print(f'[injuries] {team} → HTTP {r.status_code}')
+            return []
         data = r.json()
-        missing = data.get(side, {}).get('missingPlayers', [])
-        results = []
-        for m in missing:
-            player = m.get('player', {})
-            reason_code = m.get('reason', 3)
-            description = m.get('description') or _REASON.get(reason_code, 'Unknown')
-            name = player.get('name') or player.get('shortName', '?')
-            results.append({
-                'player': name,
-                'status': description,
-                'role': player.get('position', ''),
-                'source': 'Sofascore',
-            })
-        return results
-    except Exception:
+        items = data.get('items', [])
+        print(f'[injuries] {team} (id={team_id}) → {len(items)} injury items')
+        return [_parse_item(item) for item in items if _parse_item(item)]
+    except Exception as exc:
+        print(f'[injuries] {team} fetch error: {exc}')
         return []
+
+
+def _parse_item(item: Dict) -> Optional[Dict]:
+    """Parse one ESPN injury item into our standard dict format."""
+    try:
+        athlete = item.get('athlete', {})
+        # athlete may be a $ref link object — we only parse inline athlete data
+        name = athlete.get('fullName') or athlete.get('displayName')
+        if not name:
+            return None
+
+        # Status type: OUT, QUESTIONABLE, DOUBTFUL, etc.
+        status_type = (item.get('status', {})
+                       .get('type', {})
+                       .get('description', 'Unknown'))
+
+        # Injury details
+        details = item.get('details', {})
+        injury_type = details.get('type', '')
+        short_comment = details.get('shortComment', '')
+        status_label = short_comment or injury_type or status_type
+
+        # Position from athlete
+        position = (athlete.get('position', {}).get('abbreviation', '')
+                    if isinstance(athlete.get('position'), dict)
+                    else athlete.get('position', ''))
+
+        return {
+            'player': name,
+            'status': status_label,
+            'role': position,
+            'source': 'ESPN',
+        }
+    except Exception:
+        return None

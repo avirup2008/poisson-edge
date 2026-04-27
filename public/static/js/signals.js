@@ -151,7 +151,7 @@ function renderPinnacleVsB365(sig) {
     <div class="pin-b365">
       <span class="pb-item">Pinnacle <strong>${pin}</strong></span>
       <span class="pb-sep">·</span>
-      <span class="pb-item">B365 <strong>${b365}</strong></span>
+      <span class="pb-item">DK <strong>${b365}</strong></span>
       <span class="pb-sep">·</span>
       <span class="pb-pips" style="color:${color}">${pipStr} ${label}</span>
     </div>`;
