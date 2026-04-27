@@ -122,11 +122,16 @@ function renderElevCard(sig, globalIdx, promoted = false) {
   const stake    = (sig.kelly_stake || 0).toFixed(2);
   const kickoff  = formatKickoff(sig.date);
 
+  const soBadge = sig.structural_override
+    ? `<span class="so-badge">⚡ Structural override · €5 max · Pinnacle check required</span>`
+    : '';
+
   return `
-    <div class="elev-card${promoted ? ' promoted' : ''}">
+    <div class="elev-card${promoted ? ' promoted' : ''}${sig.structural_override ? ' structural-override' : ''}">
       <div class="ec-header">
         <div class="ec-match">${sig.home} vs ${sig.away}</div>
         <div class="ec-meta">${marketLabel(sig.market)} · Pinnacle @ ${sig.odds}${kickoff ? ' · ' + kickoff : ''}</div>
+        ${soBadge}
       </div>
 
       <div class="ec-ev-row">
@@ -188,7 +193,10 @@ function renderFeedRow(sig, globalIdx) {
   return `
     <div class="feed-row-wrap ${wrapClass}" onclick="toggleRow(this)">
       <div class="feed-row">
-        <div><span class="f-badge ${tier}">${sig.tier}</span></div>
+        <div>
+          <span class="f-badge ${tier}">${sig.tier}</span>
+          ${sig.structural_override ? '<span class="f-so-badge">⚡</span>' : ''}
+        </div>
         <div class="f-match">
           <div class="f-match-name">${sig.home} vs ${sig.away}</div>
           <div class="f-match-sub">${marketLabel(sig.market)} · ${kickoff}</div>

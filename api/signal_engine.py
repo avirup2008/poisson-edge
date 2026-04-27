@@ -37,6 +37,28 @@ _TOP8_2526 = [
 ]
 _RELEGATION_ZONE_2526 = ['Sunderland', 'Burnley', 'Leeds']
 
+# European fixtures — map team → date of next European game.
+# Update each GW. Fatigue applies when rest < 7 days before PL fixture.
+_EUROPEAN_FIXTURES: Dict[str, str] = {
+    'Aston Villa':       '2026-05-01',   # EL semi-final leg 2
+    'Nottingham Forest': '2026-05-01',   # EL semi-final leg 2
+}
+
+
+def _rest_days_from_europe(team: str, fix_date: str) -> int:
+    """
+    Return rest days between a team's European fixture and a PL fixture.
+    Returns 7 (no fatigue) if no European fixture is known or dates are missing.
+    """
+    euro_date = _EUROPEAN_FIXTURES.get(team)
+    if not euro_date or not fix_date:
+        return 7
+    try:
+        delta = date.fromisoformat(fix_date) - date.fromisoformat(euro_date)
+        return max(1, delta.days)
+    except ValueError:
+        return 7
+
 
 def _current_gw_fixtures(fixtures: List[Dict]) -> List[Dict]:
     """
@@ -57,12 +79,17 @@ def _current_gw_fixtures(fixtures: List[Dict]) -> List[Dict]:
     return [f for f in fixtures if anchor <= f.get('date', '') <= cutoff]
 
 
-def _context_note(home: str, away: str, historical: pd.DataFrame) -> Optional[str]:
+def _context_note(
+    home: str,
+    away: str,
+    historical: pd.DataFrame,
+    full_historical: Optional[pd.DataFrame] = None,
+) -> Optional[str]:
     """
     Build a context note for gate_block:
     - Cat A/B rivalry flag
     - Relegation-zone team flag
-    - H2H last-5 record
+    - H2H last-8 record (uses full 16-season history when available)
     """
     notes: List[str] = []
 
@@ -78,13 +105,23 @@ def _context_note(home: str, away: str, historical: pd.DataFrame) -> Optional[st
     if releg:
         notes.append(f'RELEG-ZONE: {", ".join(releg)}')
 
-    # H2H last 5
-    if not historical.empty and 'HomeTeam' in historical.columns and 'FTR' in historical.columns:
+    # H2H last 8 — prefer full 16-season history; fall back to current season
+    h2h_df = (
+        full_historical
+        if (full_historical is not None and not full_historical.empty)
+        else historical
+    )
+    if not h2h_df.empty and 'HomeTeam' in h2h_df.columns and 'FTR' in h2h_df.columns:
         mask = (
-            ((historical['HomeTeam'] == home) & (historical['AwayTeam'] == away)) |
-            ((historical['HomeTeam'] == away) & (historical['AwayTeam'] == home))
+            ((h2h_df['HomeTeam'] == home) & (h2h_df['AwayTeam'] == away)) |
+            ((h2h_df['HomeTeam'] == away) & (h2h_df['AwayTeam'] == home))
         )
-        h2h = historical[mask].tail(5)
+        sort_col = 'Date' if 'Date' in h2h_df.columns else None
+        h2h = (
+            h2h_df[mask].sort_values(sort_col, ascending=False).head(8)
+            if sort_col
+            else h2h_df[mask].tail(8)
+        )
         if not h2h.empty:
             home_w = sum(
                 1 for _, row in h2h.iterrows()
@@ -104,6 +141,13 @@ def _context_note(home: str, away: str, historical: pd.DataFrame) -> Optional[st
     return ' | '.join(notes) if notes else None
 
 
+def _has_named_binary_context(gate_block: Optional[str]) -> bool:
+    """True if gate_block contains a named binary structural factor."""
+    if not gate_block:
+        return False
+    return any(k in gate_block for k in ('CAT-A', 'CAT-B', 'RELEG-ZONE'))
+
+
 @dataclass
 class SignalResult:
     home: str
@@ -118,39 +162,90 @@ class SignalResult:
     lambda_away: float
     gate_block: Optional[str] = None
     date: Optional[str] = None
+    structural_override: bool = False
 
 
 @dataclass
 class GWSignals:
     fixtures: List[Dict]
-    historical: pd.DataFrame
+    historical: pd.DataFrame           # current season — used for lambda ratings
     g_atk: Dict
     g_def: Dict
     bankroll: float = 1000.0
     elo_ratings: Dict = field(default_factory=lambda: dict(ELO_RATINGS))
+    full_historical: Optional[pd.DataFrame] = None  # all 16 seasons — used for H2H
 
     def compute(self) -> List['SignalResult']:
         results = []
         for fix in _current_gw_fixtures(self.fixtures):
+            fix_date = fix.get('date', '')
+            home, away = fix['home'], fix['away']
+
+            # Fatigue: calculate rest days from European fixtures
+            home_rest = _rest_days_from_europe(home, fix_date)
+            away_rest = _rest_days_from_europe(away, fix_date)
+
             for market, odds in fix.get('markets', {}).items():
                 r = compute_signal(
-                    home=fix['home'], away=fix['away'],
+                    home=home, away=away,
                     market=market, odds=odds,
                     historical=self.historical,
                     g_atk=self.g_atk, g_def=self.g_def,
                     bankroll=self.bankroll,
                     elo_ratings=self.elo_ratings,
-                    home_rest_days=fix.get('home_rest_days', 7),
-                    away_rest_days=fix.get('away_rest_days', 7),
+                    home_rest_days=fix.get('home_rest_days', home_rest),
+                    away_rest_days=fix.get('away_rest_days', away_rest),
                     home_atk_mult=fix.get('home_atk_mult', 1.0),
                     away_atk_mult=fix.get('away_atk_mult', 1.0),
                     home_def_boost=fix.get('home_def_boost', 1.0),
                     away_def_boost=fix.get('away_def_boost', 1.0),
                 )
-                r.date = fix.get('date')
-                ctx = _context_note(fix['home'], fix['away'], self.historical)
+                r.date = fix_date
+
+                # Append context note (Cat A/B, RELEG, H2H)
+                ctx = _context_note(home, away, self.historical, self.full_historical)
                 if ctx:
                     r.gate_block = f'{r.gate_block} | {ctx}' if r.gate_block else ctx
+
+                # Append fatigue note if applied
+                if home_rest < 7 or away_rest < 7:
+                    fatigue_parts = []
+                    if home_rest < 7:
+                        fatigue_parts.append(f'{home[:6]} {home_rest}d rest')
+                    if away_rest < 7:
+                        fatigue_parts.append(f'{away[:6]} {away_rest}d rest')
+                    fatigue_note = 'FATIGUE: ' + ', '.join(fatigue_parts)
+                    r.gate_block = f'{r.gate_block} | {fatigue_note}' if r.gate_block else fatigue_note
+
+                # ── Post-context tier overrides ────────────────────────────
+
+                # Cat A O25 upgrade: real money eligible (9/9 season record)
+                match_ctx = classify_match_context(home, away, _TOP8_2526)
+                if (market == 'o25' and match_ctx == 'CatA'
+                        and r.ev_pct >= 15.0 and r.model_p >= 0.65
+                        and r.tier != 'NO'):
+                    r.tier = 'ELEV'
+                    cat_a_note = 'CAT-A-O25: real money eligible (9/9 season record)'
+                    r.gate_block = f'{r.gate_block} | {cat_a_note}' if r.gate_block else cat_a_note
+
+                # U25 block: never real money for Cat A, Cat B, or relegation matches
+                if market == 'u25' and match_ctx in ('CatA', 'CatB'):
+                    r.tier = 'NO'
+                    block_note = f'BLOCKED: u25 suppressed for {match_ctx} derby'
+                    r.gate_block = f'{r.gate_block} | {block_note}' if r.gate_block else block_note
+                elif market == 'u25' and any(t in _RELEGATION_ZONE_2526 for t in (home, away)):
+                    r.tier = 'NO'
+                    block_note = 'BLOCKED: u25 suppressed for relegation fixture'
+                    r.gate_block = f'{r.gate_block} | {block_note}' if r.gate_block else block_note
+
+                # Structural override: EV ≥ 20%, P ≥ 58%, named binary context
+                if (r.ev_pct >= 20.0 and r.model_p >= 0.58
+                        and _has_named_binary_context(r.gate_block)
+                        and r.tier not in ('NO',)):
+                    r.structural_override = True
+                    # Cap stake at €5 for structural overrides (requires Pinnacle check)
+                    r.kelly_stake = min(r.kelly_stake, 5.00)
+
                 results.append(r)
         results.sort(key=lambda r: r.ev_pct, reverse=True)
         return results
@@ -165,7 +260,7 @@ def compute_signal(
     home_atk_mult: float = 1.0, away_atk_mult: float = 1.0,
     home_def_boost: float = 1.0, away_def_boost: float = 1.0,
 ) -> SignalResult:
-    # Fix 3: validate market key before any computation
+    # Validate market key before any computation
     if market not in MARKET_KEYS:
         raise ValueError(f"Unknown market: {market!r}")
 
@@ -179,7 +274,6 @@ def compute_signal(
     probs = extract_probabilities(matrix)
 
     if market == 'hw':
-        # Fix 2: ensure elo_ratings is never None for hw market
         model_p = apply_elo_ensemble(probs['hw'], home, away, elo_ratings or dict(ELO_RATINGS))
     else:
         model_p = probs.get(market, 0.0)

@@ -264,6 +264,28 @@ html[data-theme="light"] .hero-line { font-family: 'Cormorant Garamond', Georgia
   border-color: var(--blue);
 }
 
+/* Structural override: amber border + inline badge */
+.elev-card.structural-override {
+  border-color: #F59E0B;
+}
+
+.so-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #F59E0B;
+  letter-spacing: 0.04em;
+}
+
+.f-so-badge {
+  display: inline-block;
+  font-size: 12px;
+  margin-left: 4px;
+  color: #F59E0B;
+  line-height: 1;
+}
+
 .ec-header {
   display: flex;
   flex-direction: column;

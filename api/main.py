@@ -176,7 +176,8 @@ def get_signals(bankroll: float = None) -> List[Dict]:
 
     gw_signals = GWSignals(
         fixtures=fixtures,
-        historical=store.current_season,  # current season only — avoids stale multi-season ratings
+        historical=store.current_season,      # current season only — avoids stale multi-season ratings
+        full_historical=store.historical,     # all 16 seasons — used for H2H lookup
         g_atk=store.g_atk,
         g_def=store.g_def,
         bankroll=bl,
@@ -418,4 +419,5 @@ def _serialise(r: SignalResult) -> Dict[str, Any]:
         'lambda_home': r.lambda_home, 'lambda_away': r.lambda_away,
         'gate_block': r.gate_block,
         'date': r.date,
+        'structural_override': r.structural_override,
     }
