@@ -6,8 +6,9 @@ Supports two auth modes (whichever key is set):
   Direct API: PULSESCORE_KEY  → X-Secret header, host pulsescore.net
 
 Endpoints used:
-  GET /api/v2/bet365/leagues               → find EPL league id
-  GET /api/v2/bet365/events?league={id}    → upcoming events with Fulltime Result (1x2) odds
+  RapidAPI (bet365data.p.rapidapi.com):   /v2/bet365/leagues, /v2/bet365/events
+  Direct   (pulsescore.net):              /api/v2/bet365/leagues, /api/v2/bet365/events
+  (RapidAPI strips the /api prefix — pulsescore.net uses it for internal routing)
 
 Free tier: 500 req/month. We use 2 calls per 6h cache cycle (~60/month). Well within limit.
 
@@ -46,8 +47,12 @@ def _norm(name: str) -> str:
     return _NAME_MAP.get(name.strip(), name.strip())
 
 
-def _make_headers(rapidapi_key: str, pulsescore_key: str) -> Tuple[Dict, str]:
-    """Return (headers, base_url) for whichever key is available."""
+def _make_headers(rapidapi_key: str, pulsescore_key: str) -> Tuple[Dict, str, str]:
+    """Return (headers, base_url, path_prefix) for whichever key is available.
+
+    RapidAPI serves endpoints at /v2/bet365/... (no /api prefix).
+    Direct pulsescore.net uses /api/v2/bet365/... internally.
+    """
     if rapidapi_key:
         return (
             {
@@ -56,17 +61,19 @@ def _make_headers(rapidapi_key: str, pulsescore_key: str) -> Tuple[Dict, str]:
                 'Accept':          'application/json',
             },
             _RAPIDAPI_BASE,
+            '/v2/bet365',   # RapidAPI: no /api prefix
         )
     return (
         {'X-Secret': pulsescore_key, 'Accept': 'application/json'},
         _DIRECT_BASE,
+        '/api/v2/bet365',  # direct pulsescore.net: /api prefix required
     )
 
 
-def _find_epl_id(base: str, headers: Dict) -> Optional[str]:
-    """Call /api/v2/bet365/leagues and return the EPL league id."""
+def _find_epl_id(base: str, headers: Dict, path_prefix: str = '/api/v2/bet365') -> Optional[str]:
+    """Call {path_prefix}/leagues and return the EPL league id."""
     try:
-        r = httpx.get(f'{base}/api/v2/bet365/leagues', headers=headers, timeout=10)
+        r = httpx.get(f'{base}{path_prefix}/leagues', headers=headers, timeout=10)
         print(f'[pulsescore] leagues: HTTP {r.status_code}')
         if r.status_code != 200:
             return None
@@ -142,16 +149,16 @@ def fetch_b365_pulsescore(
     if not rapidapi_key and not pulsescore_key:
         return {}
 
-    headers, base = _make_headers(rapidapi_key, pulsescore_key)
+    headers, base, path_prefix = _make_headers(rapidapi_key, pulsescore_key)
     results: Dict[str, Dict[str, float]] = {}
 
-    league_id = _find_epl_id(base, headers)
+    league_id = _find_epl_id(base, headers, path_prefix)
     if not league_id:
         return {}
 
     try:
         r = httpx.get(
-            f'{base}/api/v2/bet365/events',
+            f'{base}{path_prefix}/events',
             params={'league': league_id},
             headers=headers,
             timeout=12,
@@ -199,11 +206,11 @@ def debug_probe(rapidapi_key: str = '', pulsescore_key: str = '') -> Dict:
     if not rapidapi_key and not pulsescore_key:
         return {'error': 'No key set. Add RAPIDAPI_KEY or PULSESCORE_KEY to Vercel env vars.'}
 
-    headers, base = _make_headers(rapidapi_key, pulsescore_key)
-    out: Dict = {'base': base, 'auth': 'rapidapi' if rapidapi_key else 'direct'}
+    headers, base, path_prefix = _make_headers(rapidapi_key, pulsescore_key)
+    out: Dict = {'base': base, 'auth': 'rapidapi' if rapidapi_key else 'direct', 'path_prefix': path_prefix}
 
     try:
-        r = httpx.get(f'{base}/api/v2/bet365/leagues', headers=headers, timeout=10)
+        r = httpx.get(f'{base}{path_prefix}/leagues', headers=headers, timeout=10)
         out['leagues_status'] = r.status_code
         raw = r.json() if r.status_code == 200 else {}
         leagues = raw if isinstance(raw, list) else (raw.get('data') or raw.get('leagues') or [])
@@ -227,7 +234,7 @@ def debug_probe(rapidapi_key: str = '', pulsescore_key: str = '') -> Dict:
         lid = str(epl.get('id') or epl.get('fi') or '')
         try:
             r2 = httpx.get(
-                f'{base}/api/v2/bet365/events',
+                f'{base}{path_prefix}/events',
                 params={'league': lid},
                 headers=headers,
                 timeout=12,
