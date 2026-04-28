@@ -69,31 +69,25 @@ def _parse_event(event: Dict, df) -> Optional[Dict]:
     odds: Dict[str, float] = {}
     for bm in event.get('bookmakers', []):
         bm_key = bm.get('key')
-        if bm_key not in ('pinnacle', 'bet365'):
-            continue
+        if bm_key != 'pinnacle':
+            continue  # B365 odds come from PulseScore only — OddsAPI B365 feed is delayed/stale
         for market in bm.get('markets', []):
             key = market.get('key')
             if key != 'h2h':
                 continue
             for o in market.get('outcomes', []):
-                if bm_key == 'pinnacle':
-                    if _fuzzy_match(o['name'], raw_home):
-                        odds['hw'] = o['price']
-                    elif _fuzzy_match(o['name'], raw_away):
-                        odds['aw'] = o['price']
-                elif bm_key == 'bet365':
-                    if _fuzzy_match(o['name'], raw_home):
-                        odds['b365_hw'] = o['price']
-                    elif _fuzzy_match(o['name'], raw_away):
-                        odds['b365_aw'] = o['price']
+                if _fuzzy_match(o['name'], raw_home):
+                    odds['hw'] = o['price']
+                elif _fuzzy_match(o['name'], raw_away):
+                    odds['aw'] = o['price']
 
     if 'hw' not in odds:
         return None
 
-    # Separate Pinnacle markets from B365 reference odds.
-    # B365 must NOT go into 'markets' — compute_signal would crash on unknown keys.
-    pinnacle_markets = {k: v for k, v in odds.items() if not k.startswith('b365_')}
-    b365 = {k: v for k, v in odds.items() if k.startswith('b365_')}
+    # B365 odds are NOT read from OddsAPI (their feed is delayed hours).
+    # They are injected exclusively by PulseScore enrichment below.
+    pinnacle_markets = odds
+    b365: Dict[str, float] = {}
 
     return {
         'home': home,
@@ -151,10 +145,11 @@ def fetch_upcoming_fixtures(
     if cached is not None:
         return cached
 
-    # regions=eu,uk: eu covers Pinnacle, uk covers Bet365
+    # B365 odds come from PulseScore (real-time), not OddsAPI (delayed feed).
+    # Only request Pinnacle from OddsAPI — fewer bookmakers = smaller response = more quota.
     base = (f'{ODDS_API_BASE}/sports/{EPL_KEY}/odds'
-            f'?apiKey={api_key}&bookmakers=pinnacle,bet365'
-            f'&oddsFormat=decimal&regions=eu,uk')
+            f'?apiKey={api_key}&bookmakers=pinnacle'
+            f'&oddsFormat=decimal&regions=eu')
 
     # --- h2h ---
     try:
