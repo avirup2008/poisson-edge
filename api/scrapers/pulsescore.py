@@ -107,9 +107,39 @@ def _find_epl_league(base: str, headers: Dict, path_prefix: str = '') -> Optiona
 
 def _parse_1x2(event: Dict) -> Tuple[Optional[float], Optional[float]]:
     """
-    Extract (home_odd, away_odd) from a PulseScore event.
-    Searches market groups for Fulltime Result / 1X2 market.
+    Extract (home_odd, away_odd) from a bet365data event.
+
+    bet365data embedded event format (confirmed 2026-04-28):
+      event['outcomes'] = [
+        {'name': '1', 'decimal': '1.4200', 'od': '21/50', ...},  # home
+        {'name': 'X', 'decimal': '4.3333', 'od': '10/3',  ...},  # draw
+        {'name': '2', 'decimal': '7.5000', 'od': '13/2',  ...},  # away
+      ]
+    '1' = home win, 'X' = draw, '2' = away win.
+    'decimal' holds the decimal odds directly — no conversion needed.
     """
+    # Strategy 1: top-level 'outcomes' list (bet365data embedded event format)
+    top_outcomes = event.get('outcomes')
+    if top_outcomes and isinstance(top_outcomes, list):
+        hw: Optional[float] = None
+        aw: Optional[float] = None
+        for o in top_outcomes:
+            nm = str(o.get('name', '')).strip()
+            raw = o.get('decimal') or o.get('od') or o.get('odds') or o.get('price')
+            try:
+                odd = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if not (1.01 <= odd <= 50.0):
+                continue
+            if nm == '1':
+                hw = odd
+            elif nm == '2':
+                aw = odd
+        if hw and aw:
+            return hw, aw
+
+    # Strategy 2: market groups (pulsescore.net direct API format)
     market_groups = event.get('mg') or event.get('markets') or []
     for mg in market_groups:
         mg_name = (mg.get('nm') or mg.get('name') or '').lower()
@@ -121,7 +151,7 @@ def _parse_1x2(event: Dict) -> Tuple[Optional[float], Optional[float]]:
         draw_pos: Optional[int] = None
 
         for o in outcomes:
-            nm  = (o.get('nm') or o.get('name') or '').strip()
+            nm2 = (o.get('nm') or o.get('name') or '').strip()
             raw = o.get('od') or o.get('odds') or o.get('price') or o.get('decimal')
             try:
                 odd = float(raw)
@@ -129,7 +159,7 @@ def _parse_1x2(event: Dict) -> Tuple[Optional[float], Optional[float]]:
                 continue
             if not (1.01 <= odd <= 50.0):
                 continue
-            if 'draw' in nm.lower():
+            if 'draw' in nm2.lower() or nm2 == 'X':
                 draw_pos = len(odds_vals)
             odds_vals.append(odd)
 
@@ -149,12 +179,15 @@ def fetch_b365_pulsescore(
     """
     Fetch Bet365 1x2 odds for upcoming EPL fixtures via PulseScore.
 
-    bet365data RapidAPI structure (confirmed via debug_probe):
+    bet365data RapidAPI structure (confirmed 2026-04-28):
       GET /leagues  → list of league objects, each with embedded 'events' list.
-      League name field: 'leagueName'  (not 'nm' / 'name')
-      League ID field:   'league' composite string, e.g. 'England||Premier League'
-      Event home/away:   'home' / 'away' plain strings (not nested objects)
-      Event odds field:  'pd'  (encoded), or full market groups if /events endpoint used.
+      GET /events   → does NOT exist ("Endpoint '/events' does not exist").
+      League name field: 'leagueName'  (e.g. 'England Premier League')
+      League composite:  'league' key, e.g. 'United Kingdom||England Premier League'
+      Event home/away:   'home' / 'away' plain strings
+      Event odds:        'outcomes' list at top level —
+                         [{'name':'1','decimal':'1.42'}, {'name':'X',...}, {'name':'2',...}]
+                         '1'=home win, 'X'=draw, '2'=away win.
 
     Args:
         rapidapi_key:    RapidAPI key (bet365data on RapidAPI).
@@ -174,35 +207,10 @@ def fetch_b365_pulsescore(
     if not epl_league:
         return {}
 
-    # The league composite key (e.g. 'England||Premier League') is used as the
-    # league param when calling /events for richer odds data.
-    league_composite = epl_league.get('league', '')
-
-    # Try /events endpoint first — it may return full market-group odds data.
-    events: List[Dict] = []
-    try:
-        r = httpx.get(
-            f'{base}{path_prefix}/events',
-            params={'league': league_composite},
-            headers=headers,
-            timeout=12,
-        )
-        print(f'[pulsescore] events: HTTP {r.status_code}')
-        if r.status_code == 200:
-            data = r.json()
-            events = data if isinstance(data, list) else (
-                data.get('data') or data.get('events') or data.get('results') or []
-            )
-            print(f'[pulsescore] {len(events)} events from /events endpoint')
-        else:
-            print(f'[pulsescore] /events returned {r.status_code}, using embedded events')
-    except Exception as exc:
-        print(f'[pulsescore] events endpoint error: {exc}')
-
-    # Fall back to events embedded in the league object from /leagues.
-    if not events:
-        events = epl_league.get('events') or []
-        print(f'[pulsescore] using {len(events)} embedded events from league object')
+    # Events are embedded in the league object — /events endpoint does not exist
+    # on bet365data.p.rapidapi.com (confirmed 2026-04-28).
+    events: List[Dict] = epl_league.get('events') or []
+    print(f'[pulsescore] {len(events)} embedded EPL events')
 
     for event in events:
         # bet365data embeds home/away as plain strings at top level.
