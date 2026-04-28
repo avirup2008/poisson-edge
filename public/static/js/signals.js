@@ -473,18 +473,60 @@ function renderBoard(signals, bankroll) {
 
 // ── Data loading ────────────────────────────────────────────────
 
+const _LS_SIGS = 'pe_signals_cache';
+const _LS_BR   = 'pe_bankroll_cache';
+
+function _setCacheIndicator(stale) {
+  // Small "↻ updating…" hint next to the LIVE dot while background fetch is in flight
+  const topbar = document.querySelector('.topbar-right');
+  if (!topbar) return;
+  let el = document.getElementById('pe-stale-ind');
+  if (stale) {
+    if (!el) {
+      el = document.createElement('span');
+      el.id = 'pe-stale-ind';
+      el.style.cssText = 'font-size:10px;color:var(--text-3);letter-spacing:0.06em;';
+      el.textContent = '↻ updating';
+      topbar.prepend(el);
+    }
+  } else if (el) {
+    el.remove();
+  }
+}
+
 async function loadSignals() {
+  // ── 1. Paint from localStorage immediately (zero network wait) ──
+  try {
+    const cachedSigs = localStorage.getItem(_LS_SIGS);
+    const cachedBr   = localStorage.getItem(_LS_BR);
+    if (cachedSigs && cachedBr) {
+      renderBoard(JSON.parse(cachedSigs), parseFloat(cachedBr));
+      _setCacheIndicator(true);
+    }
+  } catch (_) { /* localStorage unavailable or corrupt — no-op */ }
+
+  // ── 2. Fetch fresh data in background, re-render when ready ────
   try {
     const [sigsRes, brRes] = await Promise.all([
       fetch('/api/signals'),
       fetch('/api/bankroll'),
     ]);
-    const sigs = await sigsRes.json();
-    const br   = await brRes.json();
+    const sigs     = await sigsRes.json();
+    const br       = await brRes.json();
+    const signals  = Array.isArray(sigs) ? sigs : [];
     const bankroll = br.current_bankroll || br.starting_bankroll || 1000;
-    renderBoard(Array.isArray(sigs) ? sigs : [], bankroll);
+
+    // Persist so next page load is instant
+    try {
+      localStorage.setItem(_LS_SIGS, JSON.stringify(signals));
+      localStorage.setItem(_LS_BR,   String(bankroll));
+    } catch (_) {}
+
+    renderBoard(signals, bankroll);
+    _setCacheIndicator(false);
   } catch (err) {
     console.error('loadSignals error:', err);
+    _setCacheIndicator(false);
   }
 }
 
