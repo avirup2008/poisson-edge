@@ -61,7 +61,7 @@ def _make_headers(rapidapi_key: str, pulsescore_key: str) -> Tuple[Dict, str, st
                 'Accept':          'application/json',
             },
             _RAPIDAPI_BASE,
-            '/v2/bet365',   # RapidAPI: no /api prefix
+            '',             # RapidAPI: no prefix at all — /leagues, /events at root
         )
     return (
         {'X-Secret': pulsescore_key, 'Accept': 'application/json'},
@@ -245,6 +245,8 @@ def debug_probe(rapidapi_key: str = '', pulsescore_key: str = '') -> Dict:
         raw = r.json() if r.status_code == 200 else {}
         leagues = raw if isinstance(raw, list) else (raw.get('data') or raw.get('leagues') or [])
         out['leagues_count'] = len(leagues)
+        # Dump first 3 leagues raw so we can see actual field names
+        out['first_leagues_raw'] = [str(lg)[:200] for lg in leagues[:3]]
         out['leagues_sample'] = [
             {'nm': lg.get('nm') or lg.get('name'), 'id': lg.get('id') or lg.get('fi')}
             for lg in leagues[:12]
