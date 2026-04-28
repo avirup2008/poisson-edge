@@ -202,12 +202,42 @@ def fetch_b365_pulsescore(
 
 
 def debug_probe(rapidapi_key: str = '', pulsescore_key: str = '') -> Dict:
-    """Diagnostic for /api/debug-pulsescore — shows raw response structure."""
+    """Diagnostic for /api/debug-pulsescore — probes multiple path variants to find correct RapidAPI paths."""
     if not rapidapi_key and not pulsescore_key:
         return {'error': 'No key set. Add RAPIDAPI_KEY or PULSESCORE_KEY to Vercel env vars.'}
 
     headers, base, path_prefix = _make_headers(rapidapi_key, pulsescore_key)
     out: Dict = {'base': base, 'auth': 'rapidapi' if rapidapi_key else 'direct', 'path_prefix': path_prefix}
+
+    # For RapidAPI: probe multiple path variants to find which one the host actually accepts.
+    # RapidAPI may strip /api, /api/v2/bet365, or just /api — we don't know without testing.
+    if rapidapi_key:
+        path_candidates = [
+            '/v2/bet365/leagues',   # our current assumption (strips /api)
+            '/leagues',             # fully stripped (RapidAPI maps root → /api/v2/bet365)
+            '/v1/bet365/leagues',   # v1 instead of v2
+            '/api/v2/bet365/leagues',  # full path (no stripping)
+            '/bet365/leagues',      # no version
+        ]
+        probe: Dict[str, int] = {}
+        working_prefix: Optional[str] = None
+        for candidate in path_candidates:
+            try:
+                r = httpx.get(f'{base}{candidate}', headers=headers, timeout=8)
+                probe[candidate] = r.status_code
+                if r.status_code == 200 and working_prefix is None:
+                    working_prefix = candidate.replace('/leagues', '')
+            except Exception as exc:
+                probe[candidate] = -1
+        out['path_probe'] = probe
+        out['working_prefix'] = working_prefix
+
+        if working_prefix is None:
+            out['conclusion'] = 'All paths returned non-200. Subscription may not cover prematch endpoints, or key is for a different API.'
+            return out
+
+        # Use the working prefix for the full diagnostic
+        path_prefix = working_prefix
 
     try:
         r = httpx.get(f'{base}{path_prefix}/leagues', headers=headers, timeout=10)
