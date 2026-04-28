@@ -6,9 +6,13 @@ Supports two auth modes (whichever key is set):
   Direct API: PULSESCORE_KEY  → X-Secret header, host pulsescore.net
 
 Endpoints used:
-  RapidAPI (bet365data.p.rapidapi.com):   /v2/bet365/leagues, /v2/bet365/events
+  RapidAPI (bet365data.p.rapidapi.com):   /leagues, /events  (no path prefix — confirmed via path probe)
   Direct   (pulsescore.net):              /api/v2/bet365/leagues, /api/v2/bet365/events
-  (RapidAPI strips the /api prefix — pulsescore.net uses it for internal routing)
+
+  bet365data RapidAPI response structure (confirmed 2026-04-28):
+    /leagues → list of {type, live, sport, tournament, leagueName, league (composite), events[]}
+    league composite key format: 'Country||League Name'  e.g. 'England||Premier League'
+    embedded events: [{home, away, pd (encoded odds)}, ...]
 
 Free tier: 500 req/month. We use 2 calls per 6h cache cycle (~60/month). Well within limit.
 
@@ -70,8 +74,8 @@ def _make_headers(rapidapi_key: str, pulsescore_key: str) -> Tuple[Dict, str, st
     )
 
 
-def _find_epl_id(base: str, headers: Dict, path_prefix: str = '/api/v2/bet365') -> Optional[str]:
-    """Call {path_prefix}/leagues and return the EPL league id."""
+def _find_epl_league(base: str, headers: Dict, path_prefix: str = '') -> Optional[Dict]:
+    """Call {path_prefix}/leagues and return the full EPL league object (including embedded events)."""
     try:
         r = httpx.get(f'{base}{path_prefix}/leagues', headers=headers, timeout=10)
         print(f'[pulsescore] leagues: HTTP {r.status_code}')
@@ -82,12 +86,19 @@ def _find_epl_id(base: str, headers: Dict, path_prefix: str = '/api/v2/bet365') 
             raw.get('data') or raw.get('leagues') or []
         )
         for lg in leagues:
-            name = (lg.get('nm') or lg.get('name') or '').lower()
+            # bet365data API uses 'leagueName' (not 'nm'/'name')
+            name = (
+                lg.get('leagueName') or lg.get('nm') or lg.get('name') or ''
+            ).lower()
             if any(kw in name for kw in _EPL_KEYWORDS):
-                lid = lg.get('id') or lg.get('fi') or lg.get('league_id')
-                print(f'[pulsescore] EPL: "{name}" id={lid}')
-                return str(lid)
+                # Composite ID is the 'league' field, e.g. 'England||Premier League'
+                lid = lg.get('league') or lg.get('id') or lg.get('fi') or lg.get('league_id')
+                print(f'[pulsescore] EPL: "{name}" league={lid}')
+                return lg          # return full object — events are embedded
         print(f'[pulsescore] EPL not found among {len(leagues)} leagues')
+        # Log first few leagueNames to help debug
+        for lg in leagues[:5]:
+            print(f'[pulsescore]   sample leagueName={lg.get("leagueName")} tournament={lg.get("tournament")}')
         return None
     except Exception as exc:
         print(f'[pulsescore] leagues error: {exc}')
@@ -138,6 +149,13 @@ def fetch_b365_pulsescore(
     """
     Fetch Bet365 1x2 odds for upcoming EPL fixtures via PulseScore.
 
+    bet365data RapidAPI structure (confirmed via debug_probe):
+      GET /leagues  → list of league objects, each with embedded 'events' list.
+      League name field: 'leagueName'  (not 'nm' / 'name')
+      League ID field:   'league' composite string, e.g. 'England||Premier League'
+      Event home/away:   'home' / 'away' plain strings (not nested objects)
+      Event odds field:  'pd'  (encoded), or full market groups if /events endpoint used.
+
     Args:
         rapidapi_key:    RapidAPI key (bet365data on RapidAPI).
         pulsescore_key:  Direct PulseScore API key (pulsescore.net).
@@ -152,50 +170,66 @@ def fetch_b365_pulsescore(
     headers, base, path_prefix = _make_headers(rapidapi_key, pulsescore_key)
     results: Dict[str, Dict[str, float]] = {}
 
-    league_id = _find_epl_id(base, headers, path_prefix)
-    if not league_id:
+    epl_league = _find_epl_league(base, headers, path_prefix)
+    if not epl_league:
         return {}
 
+    # The league composite key (e.g. 'England||Premier League') is used as the
+    # league param when calling /events for richer odds data.
+    league_composite = epl_league.get('league', '')
+
+    # Try /events endpoint first — it may return full market-group odds data.
+    events: List[Dict] = []
     try:
         r = httpx.get(
             f'{base}{path_prefix}/events',
-            params={'league': league_id},
+            params={'league': league_composite},
             headers=headers,
             timeout=12,
         )
         print(f'[pulsescore] events: HTTP {r.status_code}')
-        if r.status_code != 200:
-            print(f'[pulsescore] events body: {r.text[:300]}')
-            return {}
-
-        data = r.json()
-        events = data if isinstance(data, list) else (
-            data.get('data') or data.get('events') or data.get('results') or []
-        )
-        print(f'[pulsescore] {len(events)} events')
-
-        for event in events:
-            home_raw = (
-                event.get('ht') or event.get('home_team') or
-                (event.get('home') or {}).get('nm') or
-                (event.get('home') or {}).get('name') or ''
+        if r.status_code == 200:
+            data = r.json()
+            events = data if isinstance(data, list) else (
+                data.get('data') or data.get('events') or data.get('results') or []
             )
-            away_raw = (
-                event.get('at') or event.get('away_team') or
-                (event.get('away') or {}).get('nm') or
-                (event.get('away') or {}).get('name') or ''
-            )
-            if not home_raw or not away_raw:
-                continue
-
-            hw, aw = _parse_1x2(event)
-            if hw and aw:
-                key = f'{_norm(home_raw)} vs {_norm(away_raw)}'
-                results[key] = {'b365_hw': hw, 'b365_aw': aw}
-                print(f'[pulsescore] {key}: hw={hw} aw={aw}')
-
+            print(f'[pulsescore] {len(events)} events from /events endpoint')
+        else:
+            print(f'[pulsescore] /events returned {r.status_code}, using embedded events')
     except Exception as exc:
-        print(f'[pulsescore] events error: {exc}')
+        print(f'[pulsescore] events endpoint error: {exc}')
+
+    # Fall back to events embedded in the league object from /leagues.
+    if not events:
+        events = epl_league.get('events') or []
+        print(f'[pulsescore] using {len(events)} embedded events from league object')
+
+    for event in events:
+        # bet365data embeds home/away as plain strings at top level.
+        home_raw = (
+            event.get('home') if isinstance(event.get('home'), str) else None
+        ) or (
+            event.get('ht') or event.get('home_team') or
+            (event.get('home') or {}).get('nm') or
+            (event.get('home') or {}).get('name') or ''
+        )
+        away_raw = (
+            event.get('away') if isinstance(event.get('away'), str) else None
+        ) or (
+            event.get('at') or event.get('away_team') or
+            (event.get('away') or {}).get('nm') or
+            (event.get('away') or {}).get('name') or ''
+        )
+        if not home_raw or not away_raw:
+            continue
+
+        hw, aw = _parse_1x2(event)
+        if hw and aw:
+            key = f'{_norm(home_raw)} vs {_norm(away_raw)}'
+            results[key] = {'b365_hw': hw, 'b365_aw': aw}
+            print(f'[pulsescore] {key}: hw={hw} aw={aw}')
+        else:
+            print(f'[pulsescore] no odds parsed for {home_raw} vs {away_raw} — event keys: {list(event.keys())}')
 
     print(f'[pulsescore] enriched {len(results)} fixtures with real Bet365 odds')
     return results
@@ -245,43 +279,69 @@ def debug_probe(rapidapi_key: str = '', pulsescore_key: str = '') -> Dict:
         raw = r.json() if r.status_code == 200 else {}
         leagues = raw if isinstance(raw, list) else (raw.get('data') or raw.get('leagues') or [])
         out['leagues_count'] = len(leagues)
-        # Dump first 3 leagues raw so we can see actual field names
-        out['first_leagues_raw'] = [str(lg)[:200] for lg in leagues[:3]]
+        # Show actual field names from first league object
+        out['first_leagues_raw'] = [str(lg)[:300] for lg in leagues[:3]]
+        # Use correct field names for bet365data API
         out['leagues_sample'] = [
-            {'nm': lg.get('nm') or lg.get('name'), 'id': lg.get('id') or lg.get('fi')}
-            for lg in leagues[:12]
+            {
+                'leagueName': lg.get('leagueName'),
+                'league':     lg.get('league'),
+                'tournament': lg.get('tournament'),
+                'sport':      lg.get('sport'),
+            }
+            for lg in leagues[:15]
         ]
+        # Detect EPL using leagueName (bet365data field)
         epl = next(
             (lg for lg in leagues
-             if any(kw in (lg.get('nm') or lg.get('name') or '').lower()
+             if any(kw in (lg.get('leagueName') or lg.get('nm') or lg.get('name') or '').lower()
                     for kw in _EPL_KEYWORDS)),
             None,
         )
-        out['epl_found'] = epl
+        if epl:
+            # Don't serialise the full embedded events list — it's huge
+            epl_meta = {k: v for k, v in epl.items() if k != 'events'}
+            epl_meta['embedded_events_count'] = len(epl.get('events') or [])
+            out['epl_found'] = epl_meta
+        else:
+            out['epl_found'] = None
     except Exception as exc:
         out['leagues_error'] = str(exc)
         return out
 
     if epl:
-        lid = str(epl.get('id') or epl.get('fi') or '')
+        # Use composite league key for /events call
+        league_composite = epl.get('league', '')
+        out['league_composite'] = league_composite
+
+        # Show first embedded event (full, not truncated) so we can see odds field names
+        embedded = epl.get('events') or []
+        if embedded:
+            out['first_embedded_event_keys'] = list(embedded[0].keys())
+            out['first_embedded_event_raw'] = str(embedded[0])[:1200]
+
+        # Also try the /events endpoint with the composite key
         try:
             r2 = httpx.get(
                 f'{base}{path_prefix}/events',
-                params={'league': lid},
+                params={'league': league_composite},
                 headers=headers,
                 timeout=12,
             )
             out['events_status'] = r2.status_code
-            data = r2.json() if r2.status_code == 200 else {}
-            events = data if isinstance(data, list) else (
-                data.get('data') or data.get('events') or []
-            )
-            out['events_count'] = len(events)
-            if events:
-                out['first_event_keys'] = list(events[0].keys())
-                out['first_event_raw'] = str(events[0])[:800]
-                hw, aw = _parse_1x2(events[0])
-                out['first_event_parsed'] = {'hw': hw, 'aw': aw}
+            if r2.status_code == 200:
+                data = r2.json()
+                events = data if isinstance(data, list) else (
+                    data.get('data') or data.get('events') or []
+                )
+                out['events_count'] = len(events)
+                if events:
+                    out['first_event_keys'] = list(events[0].keys())
+                    out['first_event_raw'] = str(events[0])[:1200]
+                    hw, aw = _parse_1x2(events[0])
+                    out['first_event_parsed'] = {'hw': hw, 'aw': aw}
+            else:
+                out['events_body_snippet'] = r2.text[:300]
         except Exception as exc:
             out['events_error'] = str(exc)
 
