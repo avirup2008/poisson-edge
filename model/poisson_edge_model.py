@@ -574,17 +574,20 @@ def check_probability_gate(model_p: float, market: str) -> Optional[str]:
     """
     Probability bucket hard blocks (calibration-validated).
     Returns block reason string or None if clear.
-    
+
     O25 ≥ 75%:   BLOCKED (-20.5% calibration gap)
+    AW  ≥ 75%:   BLOCKED (-20.5% calibration gap — same bucket as O25)
     HW 75-80%:   BLOCKED (-11.7% calibration gap)
     HW ≥ 80%:    OK (-2.5% gap — within acceptable range)
     BTTS any:    No block (no calibration data yet)
     """
     if market == 'o25' and model_p >= 0.75:
         return f'HARD-BLOCK: O25 P={model_p:.1%} ≥ 75% (-20.5% calibration gap)'
+    if market == 'aw' and model_p >= 0.75:
+        return f'HARD-BLOCK: AW P={model_p:.1%} ≥ 75% (-20.5% calibration gap)'
     if market == 'hw' and 0.75 <= model_p < 0.80:
         return f'HARD-BLOCK: HW P={model_p:.1%} in 75-80% range (-11.7% calibration gap)'
-    if market in ('o25', 'hw') and 0.65 <= model_p < 0.75:
+    if market in ('o25', 'aw', 'hw') and 0.65 <= model_p < 0.75:
         return f'WATCH: P={model_p:.1%} in 65-75% watch zone'
     return None
 
