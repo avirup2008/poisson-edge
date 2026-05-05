@@ -64,13 +64,19 @@ def _rest_days_from_europe(team: str, fix_date: str) -> int:
 def _current_gw_fixtures(fixtures: List[Dict]) -> List[Dict]:
     """
     Filter to the current/next gameweek using the GW calendar.
-    Finds the first GW whose end date is >= today.
+    Finds the first GW whose end date is >= today AND has upcoming fixtures.
+    If the matched window is empty (all matches already played), advances to
+    the next GW — handles the end-of-GW transition day correctly.
     Falls back to a 7-day sliding window if we're past the calendar.
     """
     today = date.today().isoformat()
     for _gw, start, end in _GW_CALENDAR:
         if today <= end:
-            return [f for f in fixtures if start <= f.get('date', '') <= end]
+            gw_fixes = [f for f in fixtures if start <= f.get('date', '') <= end]
+            if gw_fixes:
+                return gw_fixes
+            # Window matched but OddsAPI has no upcoming fixtures in it
+            # (all played) — fall through to advance to the next GW
     # Beyond calendar — fall back to 7-day window from earliest future fixture
     future = [f for f in fixtures if f.get('date', '') >= today]
     if not future:
