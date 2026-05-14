@@ -13,8 +13,7 @@
     { "src": "/(.*)", "dest": "/public/$1" }
   ],
   "crons": [
-    { "path": "/api/refresh-fixtures", "schedule": "0 9 * * 1" },
-    { "path": "/api/refresh-fixtures", "schedule": "0 9 * * 4" },
+    { "path": "/api/refresh-fixtures", "schedule": "0 8 * * *" },
     { "path": "/api/refresh-results", "schedule": "0 23 * * *" }
   ]
 }
